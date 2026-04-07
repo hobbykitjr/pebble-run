@@ -149,6 +149,7 @@ static bool s_started, s_paused, s_done;
 static bool s_half;             // Halfway alert fired
 static int s_mi;                // Motivation string index
 static uint32_t s_done_mask=0;  // Completion bitmask
+static int s_pause_sel=0;       // Pause menu: 0=Resume, 1=Complete, 2=Quit
 
 // ============================================================================
 // COMPLETION TRACKING
@@ -165,12 +166,19 @@ static int wk_done_count(int wk) {
   for(int d=0;d<3;d++) if(is_complete(wk,d)) c++;
   return c;
 }
-// Find first incomplete session
+// Find first incomplete session AFTER the highest completed one
 static void find_next(int *wk, int *day) {
-  for(int w=0;w<9;w++)
-    for(int d=0;d<3;d++)
-      if(!is_complete(w,d)) { *wk=w; *day=d; return; }
-  *wk=8; *day=2; // All done — show last
+  // Find highest completed session index
+  int highest = -1;
+  for(int i=26; i>=0; i--)
+    if((s_done_mask >> i) & 1) { highest = i; break; }
+  // First incomplete after that
+  for(int i=highest+1; i<27; i++) {
+    if(!((s_done_mask >> i) & 1)) { *wk=i/3; *day=i%3; return; }
+  }
+  // All done or end reached — stay at highest
+  if(highest >= 0) { *wk=highest/3; *day=highest%3; }
+  else { *wk=0; *day=0; }
 }
 
 // ============================================================================
@@ -450,18 +458,55 @@ static void run_draw(Layer *l, GContext *ctx) {
 
   // Paused overlay
   if(s_paused) {
+    // Dark overlay box
     graphics_context_set_fill_color(ctx, GColorBlack);
     int bx = w/2-75, bxw = 150;
     #ifdef PBL_RECT
-    bx = 2; bxw = w-4;
+    bx = 4; bxw = w-8;
     #endif
-    graphics_fill_rect(ctx, GRect(bx, h/2-18, bxw, 38), 8, GCornersAll);
-    graphics_context_set_text_color(ctx, GColorWhite);
-    const char *ptxt = s_started ? "PAUSED" : "SELECT to Start";
-    GFont pf = s_started ? f28 : f18;
-    int py = s_started ? h/2-16 : h/2-12;
-    graphics_draw_text(ctx, ptxt, pf,
-      GRect(0,py,w,34), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+
+    if(!s_started) {
+      // Pre-start: simple "SELECT to Start"
+      graphics_fill_rect(ctx, GRect(bx, h/2-18, bxw, 38), 8, GCornersAll);
+      graphics_context_set_text_color(ctx, GColorWhite);
+      graphics_draw_text(ctx, "SELECT to Start", f18,
+        GRect(0, h/2-12, w, 26), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+    } else {
+      // Pause menu with 3 options
+      int menu_h = 80;
+      int my = h/2 - menu_h/2;
+      graphics_fill_rect(ctx, GRect(bx, my, bxw, menu_h), 8, GCornersAll);
+
+      const char *opts[] = {"Resume", "Complete", "Quit"};
+      int row_h = 24;
+      int oy = my + 4;
+
+      for(int i=0; i<3; i++) {
+        if(i == s_pause_sel) {
+          // Highlight selected option
+          #ifdef PBL_COLOR
+          GColor hl;
+          if(i==0) hl = GColorFromHEX(0x0055AA);
+          else if(i==1) hl = GColorIslamicGreen;
+          else hl = GColorFromHEX(0x882200);
+          graphics_context_set_fill_color(ctx, hl);
+          #else
+          graphics_context_set_fill_color(ctx, GColorWhite);
+          #endif
+          graphics_fill_rect(ctx, GRect(bx+4, oy, bxw-8, row_h), 4, GCornersAll);
+          #ifdef PBL_COLOR
+          graphics_context_set_text_color(ctx, GColorWhite);
+          #else
+          graphics_context_set_text_color(ctx, GColorBlack);
+          #endif
+        } else {
+          graphics_context_set_text_color(ctx, GColorLightGray);
+        }
+        graphics_draw_text(ctx, opts[i], f18,
+          GRect(0, oy, w, row_h), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+        oy += row_h;
+      }
+    }
   }
 }
 
@@ -485,15 +530,47 @@ static void run_tick(struct tm *t, TimeUnits u) {
 // ============================================================================
 static void run_sel(ClickRecognizerRef ref, void *ctx) {
   if(s_done) { window_stack_pop(true); return; }
-  if(!s_started) { s_started = true; s_paused = false; }
-  else s_paused = !s_paused;
+  if(!s_started) {
+    // First press: start the run
+    s_started = true; s_paused = false;
+  } else if(!s_paused) {
+    // Running: pause and show menu
+    s_paused = true; s_pause_sel = 0;
+  } else {
+    // Paused: confirm selected option
+    switch(s_pause_sel) {
+      case 0: s_paused = false; break;  // Resume
+      case 1: // Complete — mark done and exit
+        s_done = true;
+        mark_complete(s_wk, s_day);
+        vib_done();
+        break;
+      case 2: // Quit — exit without completing
+        window_stack_pop(true);
+        return;
+    }
+  }
   if(s_run_layer) layer_mark_dirty(s_run_layer);
+}
+static void run_up(ClickRecognizerRef ref, void *ctx) {
+  if(s_paused && s_started) {
+    s_pause_sel = (s_pause_sel + 2) % 3;  // Wrap up
+    if(s_run_layer) layer_mark_dirty(s_run_layer);
+  }
+}
+static void run_down(ClickRecognizerRef ref, void *ctx) {
+  if(s_paused && s_started) {
+    s_pause_sel = (s_pause_sel + 1) % 3;  // Wrap down
+    if(s_run_layer) layer_mark_dirty(s_run_layer);
+  }
 }
 static void run_back(ClickRecognizerRef ref, void *ctx) {
   window_stack_pop(true);
 }
 static void run_click(void *ctx) {
   window_single_click_subscribe(BUTTON_ID_SELECT, run_sel);
+  window_single_click_subscribe(BUTTON_ID_UP, run_up);
+  window_single_click_subscribe(BUTTON_ID_DOWN, run_down);
   window_single_click_subscribe(BUTTON_ID_BACK, run_back);
 }
 static void run_load(Window *w) {
@@ -601,14 +678,18 @@ static void day_load(Window *w) {
   menu_layer_set_center_focused(s_day_menu, true);
   #endif
   layer_add_child(wl, menu_layer_get_layer(s_day_menu));
-  // Auto-select first incomplete day in this week
-  for(int d=0; d<3; d++) {
-    if(!is_complete(s_wk, d)) {
-      menu_layer_set_selected_index(s_day_menu,
-        (MenuIndex){.section=0,.row=d}, MenuRowAlignCenter, false);
-      break;
-    }
+  // Auto-select first incomplete day after highest completed in this week
+  int highest_d = -1;
+  for(int d=2; d>=0; d--)
+    if(is_complete(s_wk, d)) { highest_d = d; break; }
+  int sel_d = 0;
+  for(int d=highest_d+1; d<3; d++) {
+    if(!is_complete(s_wk, d)) { sel_d = d; break; }
   }
+  // If all done or none after highest, default to last completed+1 or 0
+  if(highest_d >= 0 && sel_d <= highest_d) sel_d = (highest_d < 2) ? highest_d+1 : 2;
+  menu_layer_set_selected_index(s_day_menu,
+    (MenuIndex){.section=0,.row=sel_d}, MenuRowAlignCenter, false);
 }
 static void day_unload(Window *w) {
   if(s_day_menu) { menu_layer_destroy(s_day_menu); s_day_menu = NULL; }
