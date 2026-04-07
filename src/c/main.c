@@ -1,8 +1,9 @@
 /**
- * Pixel Run C25K — Couch to 5K for Pebble Round 2
- * Target: gabbro (260x260, round, 64-color)
+ * Pixel Run C25K — Couch to 5K for Pebble
+ * Targets: basalt, chalk, diorite, gabbro
  *
  * Week select → Day select → Run timer with vibration cues
+ * Tracks completed sessions, auto-suggests next run on launch.
  * No phone/JS required — runs entirely on-watch.
  */
 
@@ -129,6 +130,7 @@ static const char *s_motiv[] = {
 // Persist keys
 #define P_WEEK 0
 #define P_DAY  1
+#define P_DONE 2   // uint32 bitmask: bit (week*3+day) = completed
 
 // ============================================================================
 // GLOBALS
@@ -146,6 +148,30 @@ static int s_tot_dur;           // Total session duration
 static bool s_started, s_paused, s_done;
 static bool s_half;             // Halfway alert fired
 static int s_mi;                // Motivation string index
+static uint32_t s_done_mask=0;  // Completion bitmask
+
+// ============================================================================
+// COMPLETION TRACKING
+// ============================================================================
+static bool is_complete(int wk, int day) {
+  return (s_done_mask >> (wk*3+day)) & 1;
+}
+static void mark_complete(int wk, int day) {
+  s_done_mask |= (1u << (wk*3+day));
+  persist_write_int(P_DONE, (int)s_done_mask);
+}
+static int wk_done_count(int wk) {
+  int c=0;
+  for(int d=0;d<3;d++) if(is_complete(wk,d)) c++;
+  return c;
+}
+// Find first incomplete session
+static void find_next(int *wk, int *day) {
+  for(int w=0;w<9;w++)
+    for(int d=0;d<3;d++)
+      if(!is_complete(w,d)) { *wk=w; *day=d; return; }
+  *wk=8; *day=2; // All done — show last
+}
 
 // ============================================================================
 // HELPERS
@@ -185,8 +211,7 @@ static void next_phase(void) {
   if(s_pi >= n) {
     s_done = true;
     vib_done();
-    persist_write_int(P_WEEK, s_wk);
-    persist_write_int(P_DAY, s_day);
+    mark_complete(s_wk, s_day);
     return;
   }
   int o=s_sess[s_si][0];
@@ -229,8 +254,12 @@ static GColor phase_color(uint8_t type) {
   #endif
 }
 
-// Tiny pixel race car
+// Tiny pixel race car with black outline for visibility
 static void draw_car(GContext *ctx, int cx, int top_y) {
+  // Black outline/shadow
+  graphics_context_set_fill_color(ctx, GColorBlack);
+  graphics_fill_rect(ctx, GRect(cx-5, top_y+1, 11, 5), 0, GCornerNone);
+  graphics_fill_rect(ctx, GRect(cx-3, top_y-1, 7, 2), 0, GCornerNone);
   // Roof
   graphics_context_set_fill_color(ctx, GColorWhite);
   graphics_fill_rect(ctx, GRect(cx-2, top_y, 5, 2), 0, GCornerNone);
@@ -271,19 +300,23 @@ static void draw_session_bar(GContext *ctx, int bw, int bh, int bar_w, int bar_h
   total_elapsed += phase_elapsed;
   if(s_done) total_elapsed = s_tot_dur;
 
+  // Black background behind bar for contrast
+  graphics_context_set_fill_color(ctx, GColorBlack);
+  graphics_fill_rect(ctx, GRect(bar_x-2, bar_y-2, bar_w+4, bar_h+4), 0, GCornerNone);
+
   // Draw each phase segment
   int x = bar_x;
   for(int i = 0; i < n; i++) {
     int seg_w = (s_phases[o+i].dur * bar_w) / s_tot_dur;
-    if(i == n-1) seg_w = bar_x + bar_w - x;  // Fill remainder
+    if(i == n-1) seg_w = bar_x + bar_w - x;
     if(seg_w < 1) seg_w = 1;
 
-    if(i < s_pi) {
+    if(i < s_pi || s_done) {
       // Completed: gray
       graphics_context_set_fill_color(ctx, GColorDarkGray);
       graphics_fill_rect(ctx, GRect(x, bar_y, seg_w, bar_h), 0, GCornerNone);
-    } else if(i == s_pi && !s_done) {
-      // Current phase: gray for elapsed portion, color for remaining
+    } else if(i == s_pi) {
+      // Current phase: gray for elapsed, color for remaining
       int dur = s_phases[o+i].dur;
       int gray_w = dur > 0 ? (phase_elapsed * seg_w) / dur : 0;
       if(gray_w > 0) {
@@ -292,10 +325,6 @@ static void draw_session_bar(GContext *ctx, int bw, int bh, int bar_w, int bar_h
       }
       graphics_context_set_fill_color(ctx, phase_color(s_phases[o+i].type));
       graphics_fill_rect(ctx, GRect(x+gray_w, bar_y, seg_w-gray_w, bar_h), 0, GCornerNone);
-    } else if(s_done) {
-      // All done: everything gray
-      graphics_context_set_fill_color(ctx, GColorDarkGray);
-      graphics_fill_rect(ctx, GRect(x, bar_y, seg_w, bar_h), 0, GCornerNone);
     } else {
       // Future: full phase color
       graphics_context_set_fill_color(ctx, phase_color(s_phases[o+i].type));
@@ -310,12 +339,12 @@ static void draw_session_bar(GContext *ctx, int bw, int bh, int bar_w, int bar_h
     x += seg_w;
   }
 
-  // Border
+  // White border
   graphics_context_set_stroke_color(ctx, GColorWhite);
   graphics_draw_rect(ctx, GRect(bar_x-1, bar_y-1, bar_w+2, bar_h+2));
 
   // Checkered flag at finish
-  draw_flag(ctx, bar_x + bar_w + 3, bar_y + (bar_h-8)/2);
+  draw_flag(ctx, bar_x + bar_w + 4, bar_y + (bar_h-8)/2);
 
   // Race car marker above bar
   int car_x = s_tot_dur > 0
@@ -323,7 +352,7 @@ static void draw_session_bar(GContext *ctx, int bw, int bh, int bar_w, int bar_h
     : bar_x;
   if(car_x < bar_x) car_x = bar_x;
   if(car_x > bar_x + bar_w) car_x = bar_x + bar_w;
-  draw_car(ctx, car_x, bar_y - 9);
+  draw_car(ctx, car_x, bar_y - 10);
 }
 
 static void run_draw(Layer *l, GContext *ctx) {
@@ -348,22 +377,22 @@ static void run_draw(Layer *l, GContext *ctx) {
   graphics_context_set_fill_color(ctx, bg);
   graphics_fill_rect(ctx, b, 0, GCornerNone);
 
-  // Layout: session bar dimensions
-  int bar_h = 14;
-  int bar_w, bar_y;
+  // Session bar dimensions
+  int bar_h = 16;
+  int bar_w;
   #ifdef PBL_ROUND
-  bar_w = w * 72 / 100;
+  bar_w = w * 68 / 100;   // Leave room for flag
   #else
-  bar_w = w * 82 / 100;
+  bar_w = w * 78 / 100;
   #endif
-  bar_y = h * 50 / 100;
+  int bar_y = h * 50 / 100;
 
   // Relative Y positions
   int y_hdr   = h * 10 / 100;
   int y_phase = h * 17 / 100;
   int y_count = h * 30 / 100;
-  int y_rem   = h * 58 / 100;
-  int y_motiv = h * 68 / 100;
+  int y_rem   = h * 60 / 100;
+  int y_motiv = h * 70 / 100;
 
   // Fonts
   GFont f28 = fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD);
@@ -372,11 +401,10 @@ static void run_draw(Layer *l, GContext *ctx) {
   GFont f14 = fonts_get_system_font(FONT_KEY_GOTHIC_14);
   graphics_context_set_text_color(ctx, fg);
 
-  // Session bar (shown on both run and done screens)
+  // Session progress bar (both run and done)
   draw_session_bar(ctx, w, h, bar_w, bar_h, bar_y);
 
   if(s_done) {
-    // Completion screen — text above and below bar
     graphics_draw_text(ctx, "DONE!", f28,
       GRect(0, y_hdr+5, w, 34), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
     char buf[32];
@@ -484,20 +512,69 @@ static void run_unload(Window *w) {
 }
 
 // ============================================================================
-// DAY MENU
+// DAY MENU (custom drawn with completion status)
 // ============================================================================
 static uint16_t day_num_rows(MenuLayer *ml, uint16_t si, void *data) { return 3; }
-static int16_t day_cell_h(MenuLayer *ml, MenuIndex *idx, void *data) { return 52; }
+static int16_t day_cell_h(MenuLayer *ml, MenuIndex *idx, void *data) { return 56; }
 
 static void day_draw(GContext *ctx, const Layer *cell, MenuIndex *idx, void *data) {
-  char title[8];
-  snprintf(title, sizeof(title), "Day %d", idx->row + 1);
-  int si = s_wk_sess[s_wk][idx->row];
-  // Show total time in subtitle
+  GRect cb = layer_get_bounds(cell);
+  int row = idx->row;
+  int si = s_wk_sess[s_wk][row];
+  bool done = is_complete(s_wk, row);
+  bool selected = menu_layer_get_selected_index(s_day_menu).row == row;
+
+  // Background
+  #ifdef PBL_COLOR
+  if(selected) {
+    graphics_context_set_fill_color(ctx, GColorFromHEX(0x0055AA));
+    graphics_fill_rect(ctx, cb, 0, GCornerNone);
+  }
+  // Left accent: mini session preview bar
+  int o=s_sess[si][0], n=s_sess[si][1];
+  int acc_h = cb.size.h - 8;
+  int acc_x = 4, acc_y = 4;
+  for(int i=0; i<n; i++) {
+    int seg_h = (s_phases[o+i].dur * acc_h) / sess_dur(si);
+    if(seg_h < 1) seg_h = 1;
+    graphics_context_set_fill_color(ctx, done ? GColorDarkGray : phase_color(s_phases[o+i].type));
+    graphics_fill_rect(ctx, GRect(acc_x, acc_y, 4, seg_h), 0, GCornerNone);
+    acc_y += seg_h;
+  }
+  #endif
+
+  // Text
+  int tx = 14;
+  graphics_context_set_text_color(ctx, selected ? GColorWhite :
+    (done ? GColorLightGray : GColorWhite));
+
+  char title[20];
+  if(done)
+    snprintf(title, sizeof(title), "Day %d - Done!", row+1);
+  else
+    snprintf(title, sizeof(title), "Day %d", row+1);
+
+  GFont ft = fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD);
+  GFont fs = fonts_get_system_font(FONT_KEY_GOTHIC_14);
+  graphics_draw_text(ctx, title, ft,
+    GRect(tx, 2, cb.size.w-tx-10, 28), GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
+
   char sub[40];
-  int dur = sess_dur(si);
-  snprintf(sub, sizeof(sub), "%s (%d min)", s_sess_desc[si], dur/60);
-  menu_cell_basic_draw(ctx, cell, title, sub, NULL);
+  snprintf(sub, sizeof(sub), "%s (%d min)", s_sess_desc[si], sess_dur(si)/60);
+  graphics_draw_text(ctx, sub, fs,
+    GRect(tx, 28, cb.size.w-tx-10, 18), GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
+
+  // Green check circle for completed
+  #ifdef PBL_COLOR
+  if(done) {
+    graphics_context_set_fill_color(ctx, GColorGreen);
+    graphics_fill_circle(ctx, GPoint(cb.size.w-16, cb.size.h/2), 6);
+    graphics_context_set_fill_color(ctx, GColorWhite);
+    // Simple checkmark: two small rects
+    graphics_fill_rect(ctx, GRect(cb.size.w-19, cb.size.h/2, 3, 2), 0, GCornerNone);
+    graphics_fill_rect(ctx, GRect(cb.size.w-17, cb.size.h/2-3, 2, 5), 0, GCornerNone);
+  }
+  #endif
 }
 
 static void day_sel(MenuLayer *ml, MenuIndex *idx, void *data) {
@@ -515,26 +592,86 @@ static void day_load(Window *w) {
     .draw_row = day_draw,
     .select_click = day_sel,
   });
+  #ifdef PBL_COLOR
+  menu_layer_set_normal_colors(s_day_menu, GColorFromHEX(0x1a1a2e), GColorWhite);
+  menu_layer_set_highlight_colors(s_day_menu, GColorFromHEX(0x0055AA), GColorWhite);
+  #endif
   menu_layer_set_click_config_onto_window(s_day_menu, w);
   #ifdef PBL_ROUND
   menu_layer_set_center_focused(s_day_menu, true);
   #endif
   layer_add_child(wl, menu_layer_get_layer(s_day_menu));
+  // Auto-select first incomplete day in this week
+  for(int d=0; d<3; d++) {
+    if(!is_complete(s_wk, d)) {
+      menu_layer_set_selected_index(s_day_menu,
+        (MenuIndex){.section=0,.row=d}, MenuRowAlignCenter, false);
+      break;
+    }
+  }
 }
 static void day_unload(Window *w) {
   if(s_day_menu) { menu_layer_destroy(s_day_menu); s_day_menu = NULL; }
 }
 
 // ============================================================================
-// WEEK MENU
+// WEEK MENU (custom drawn with progress dots)
 // ============================================================================
 static uint16_t wk_num_rows(MenuLayer *ml, uint16_t si, void *data) { return 9; }
-static int16_t wk_cell_h(MenuLayer *ml, MenuIndex *idx, void *data) { return 52; }
+static int16_t wk_cell_h(MenuLayer *ml, MenuIndex *idx, void *data) { return 56; }
 
 static void wk_draw(GContext *ctx, const Layer *cell, MenuIndex *idx, void *data) {
-  char title[12];
-  snprintf(title, sizeof(title), "Week %d", idx->row + 1);
-  menu_cell_basic_draw(ctx, cell, title, s_wk_desc[idx->row], NULL);
+  GRect cb = layer_get_bounds(cell);
+  int row = idx->row;
+  int done_cnt = wk_done_count(row);
+  bool selected = menu_layer_get_selected_index(s_wk_menu).row == row;
+
+  #ifdef PBL_COLOR
+  // Background
+  if(selected) {
+    graphics_context_set_fill_color(ctx, GColorFromHEX(0x0055AA));
+    graphics_fill_rect(ctx, cb, 0, GCornerNone);
+  }
+  // Left accent bar: color by week progression
+  GColor accent;
+  if(row < 3)      accent = GColorFromHEX(0x00AA55);  // Early: green
+  else if(row < 6) accent = GColorFromHEX(0xE0A000);  // Mid: yellow
+  else             accent = GColorFromHEX(0xE04000);  // Late: orange
+  if(done_cnt == 3) accent = GColorDarkGray;           // All done: muted
+  graphics_context_set_fill_color(ctx, accent);
+  graphics_fill_rect(ctx, GRect(0, 0, 5, cb.size.h), 0, GCornerNone);
+  #endif
+
+  // Title
+  char title[16];
+  snprintf(title, sizeof(title), "Week %d", row+1);
+  GFont ft = fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD);
+  GFont fs = fonts_get_system_font(FONT_KEY_GOTHIC_14);
+
+  GColor tc = (done_cnt==3) ? GColorLightGray : GColorWhite;
+  #ifndef PBL_COLOR
+  tc = GColorWhite;
+  #endif
+  graphics_context_set_text_color(ctx, selected ? GColorWhite : tc);
+
+  graphics_draw_text(ctx, title, ft,
+    GRect(10, 2, cb.size.w-50, 28), GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
+  graphics_draw_text(ctx, s_wk_desc[row], fs,
+    GRect(10, 28, cb.size.w-50, 18), GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
+
+  // Completion dots (3 circles on right side)
+  int dx = cb.size.w - 34;
+  int dy = cb.size.h / 2;
+  for(int d=0; d<3; d++) {
+    #ifdef PBL_COLOR
+    graphics_context_set_fill_color(ctx,
+      is_complete(row, d) ? GColorGreen : GColorDarkGray);
+    #else
+    graphics_context_set_fill_color(ctx,
+      is_complete(row, d) ? GColorWhite : GColorDarkGray);
+    #endif
+    graphics_fill_circle(ctx, GPoint(dx + d*10, dy), 4);
+  }
 }
 
 static void wk_sel(MenuLayer *ml, MenuIndex *idx, void *data) {
@@ -552,17 +689,20 @@ static void wk_load(Window *w) {
     .draw_row = wk_draw,
     .select_click = wk_sel,
   });
+  #ifdef PBL_COLOR
+  menu_layer_set_normal_colors(s_wk_menu, GColorFromHEX(0x1a1a2e), GColorWhite);
+  menu_layer_set_highlight_colors(s_wk_menu, GColorFromHEX(0x0055AA), GColorWhite);
+  #endif
   menu_layer_set_click_config_onto_window(s_wk_menu, w);
   #ifdef PBL_ROUND
   menu_layer_set_center_focused(s_wk_menu, true);
   #endif
   layer_add_child(wl, menu_layer_get_layer(s_wk_menu));
-  // Scroll to last completed week
-  int last_wk = persist_exists(P_WEEK) ? persist_read_int(P_WEEK) : 0;
-  if(last_wk >= 0 && last_wk < 9) {
-    menu_layer_set_selected_index(s_wk_menu,
-      (MenuIndex){.section=0,.row=last_wk}, MenuRowAlignCenter, false);
-  }
+  // Auto-scroll to next incomplete week
+  int next_wk, next_day;
+  find_next(&next_wk, &next_day);
+  menu_layer_set_selected_index(s_wk_menu,
+    (MenuIndex){.section=0,.row=next_wk}, MenuRowAlignCenter, false);
 }
 static void wk_unload(Window *w) {
   if(s_wk_menu) { menu_layer_destroy(s_wk_menu); s_wk_menu = NULL; }
@@ -573,6 +713,8 @@ static void wk_unload(Window *w) {
 // ============================================================================
 static void init(void) {
   srand(time(NULL));
+  // Load completion data
+  if(persist_exists(P_DONE)) s_done_mask = (uint32_t)persist_read_int(P_DONE);
 
   s_wk_win = window_create();
   window_set_window_handlers(s_wk_win,
