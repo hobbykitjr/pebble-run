@@ -151,6 +151,18 @@ static int s_mi;                // Motivation string index
 static uint32_t s_done_mask=0;  // Completion bitmask
 static int s_pause_sel=0;       // Pause menu: 0=Resume, 1=Complete, 2=Quit
 
+// Heart rate tracking
+#if PBL_API_EXISTS(health_service_peek_current_value)
+#define HAS_HR 1
+#else
+#define HAS_HR 0
+#endif
+static int s_hr_bpm=0;          // Current BPM (0 = no reading)
+static int s_hr_peak=0;         // Peak BPM during session
+static int s_hr_sum=0;          // Sum of all readings (for average)
+static int s_hr_count=0;        // Number of readings
+#define MAX_HR 190              // Default max HR for zone calculation
+
 // ============================================================================
 // COMPLETION TRACKING
 // ============================================================================
@@ -243,11 +255,40 @@ static void init_session(void) {
   s_done = false;
   s_half = false;
   s_mi = rand() % N_MOTIV;
+  s_hr_bpm=0; s_hr_peak=0; s_hr_sum=0; s_hr_count=0;
 }
 
 // ============================================================================
 // RUN SCREEN DRAWING
 // ============================================================================
+
+// Heart rate zone color (based on % of max HR)
+static GColor hr_zone_color(int bpm) {
+  #ifdef PBL_COLOR
+  int pct = (bpm * 100) / MAX_HR;
+  if(pct >= 90) return GColorRed;           // Zone 5: max
+  if(pct >= 80) return GColorOrange;        // Zone 4: hard
+  if(pct >= 70) return GColorChromeYellow;  // Zone 3: cardio
+  if(pct >= 60) return GColorGreen;         // Zone 2: fat burn
+  return GColorPictonBlue;                  // Zone 1: light
+  #else
+  return GColorWhite;
+  #endif
+}
+
+// Tiny pixel heart icon (7x6)
+static void draw_heart(GContext *ctx, int x, int y, GColor c) {
+  graphics_context_set_fill_color(ctx, c);
+  // Top bumps
+  graphics_fill_rect(ctx, GRect(x+1,y,2,2), 0, GCornerNone);
+  graphics_fill_rect(ctx, GRect(x+4,y,2,2), 0, GCornerNone);
+  // Middle wide
+  graphics_fill_rect(ctx, GRect(x,y+1,7,2), 0, GCornerNone);
+  // Taper
+  graphics_fill_rect(ctx, GRect(x+1,y+3,5,1), 0, GCornerNone);
+  graphics_fill_rect(ctx, GRect(x+2,y+4,3,1), 0, GCornerNone);
+  graphics_fill_rect(ctx, GRect(x+3,y+5,1,1), 0, GCornerNone);
+}
 
 // Phase color helper
 static GColor phase_color(uint8_t type) {
@@ -419,12 +460,31 @@ static void run_draw(Layer *l, GContext *ctx) {
     snprintf(buf, sizeof(buf), "Week %d Day %d", s_wk+1, s_day+1);
     graphics_draw_text(ctx, buf, f18,
       GRect(0, y_count+4, w, 24), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
-    // Completed time + motivation below bar
+    // Stats below bar
     char tbuf[8];
     fmt_ms(tbuf, sizeof(tbuf), s_tot_dur);
-    snprintf(buf, sizeof(buf), "%s completed!", tbuf);
-    graphics_draw_text(ctx, buf, f18,
-      GRect(0, y_rem, w, 22), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+    if(s_hr_count > 0) {
+      int avg = s_hr_sum / s_hr_count;
+      snprintf(buf, sizeof(buf), "%s  Avg %d  Peak %d", tbuf, avg, s_hr_peak);
+    } else {
+      snprintf(buf, sizeof(buf), "%s completed!", tbuf);
+    }
+    graphics_draw_text(ctx, buf, f14,
+      GRect(0, y_rem, w, 18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+    // HR stats with heart icons on done screen
+    if(s_hr_count > 0) {
+      int avg = s_hr_sum / s_hr_count;
+      draw_heart(ctx, w/2-50, y_rem+20, hr_zone_color(avg));
+      char abuf[8]; snprintf(abuf,sizeof(abuf),"%d",avg);
+      graphics_context_set_text_color(ctx, fg);
+      graphics_draw_text(ctx,abuf,f14,GRect(w/2-42,y_rem+17,30,16),
+        GTextOverflowModeTrailingEllipsis,GTextAlignmentLeft,NULL);
+      draw_heart(ctx, w/2+14, y_rem+20, hr_zone_color(s_hr_peak));
+      char pbuf2[8]; snprintf(pbuf2,sizeof(pbuf2),"%d",s_hr_peak);
+      graphics_draw_text(ctx,pbuf2,f14,GRect(w/2+22,y_rem+17,30,16),
+        GTextOverflowModeTrailingEllipsis,GTextAlignmentLeft,NULL);
+    }
+    // Motivation
     graphics_draw_text(ctx, s_motiv[s_mi], f18,
       GRect(10, y_hdr-4, w-20, 40), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
     return;
@@ -447,11 +507,29 @@ static void run_draw(Layer *l, GContext *ctx) {
   graphics_draw_text(ctx, obuf, f18,
     GRect(0,y_rem,w,22), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
 
-  // Week/Day (bottom)
-  char hdr[16];
-  snprintf(hdr, sizeof(hdr), "W%d D%d", s_wk+1, s_day+1);
-  graphics_draw_text(ctx, hdr, f14,
-    GRect(0,y_hdr,w,18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+  // Week/Day + HR (bottom)
+  if(s_hr_bpm > 0) {
+    // Show W/D on left, heart+BPM on right
+    char hdr[16];
+    snprintf(hdr, sizeof(hdr), "W%d D%d", s_wk+1, s_day+1);
+    graphics_draw_text(ctx, hdr, f14,
+      GRect(20,y_hdr,w/2-20,18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+    // Heart icon + BPM
+    GColor hc = hr_zone_color(s_hr_bpm);
+    draw_heart(ctx, w/2+20, y_hdr+5, hc);
+    char bpm_buf[8];
+    snprintf(bpm_buf,sizeof(bpm_buf),"%d",s_hr_bpm);
+    graphics_context_set_text_color(ctx, hc);
+    graphics_draw_text(ctx,bpm_buf,f18,
+      GRect(w/2+30,y_hdr-2,50,22), GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
+    graphics_context_set_text_color(ctx, fg);  // Restore
+  } else {
+    // No HR — just centered W/D
+    char hdr[16];
+    snprintf(hdr, sizeof(hdr), "W%d D%d", s_wk+1, s_day+1);
+    graphics_draw_text(ctx, hdr, f14,
+      GRect(0,y_hdr,w,18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+  }
 
   // Paused overlay
   if(s_paused) {
@@ -519,6 +597,18 @@ static void run_tick(struct tm *t, TimeUnits u) {
     vib_half();
   }
   if(s_ph_rem <= 0) next_phase();
+  // Poll heart rate
+  #if HAS_HR
+  {
+    HealthValue hv = health_service_peek_current_value(HealthMetricHeartRateBPM);
+    if(hv > 0) {
+      s_hr_bpm = (int)hv;
+      if(s_hr_bpm > s_hr_peak) s_hr_peak = s_hr_bpm;
+      s_hr_sum += s_hr_bpm;
+      s_hr_count++;
+    }
+  }
+  #endif
   if(s_run_layer) layer_mark_dirty(s_run_layer);
 }
 
