@@ -217,57 +217,88 @@ static void init_session(void) {
 // ============================================================================
 static void run_draw(Layer *l, GContext *ctx) {
   GRect b = layer_get_bounds(l);
-  int w=b.size.w;
+  int w=b.size.w, h=b.size.h;
   int o=s_sess[s_si][0];
   uint8_t pt = s_phases[o+s_pi].type;
 
   // Phase background color
-  GColor bg;
-  if(s_done)           bg = GColorIslamicGreen;
-  else if(pt==PH_RUN)  bg = GColorFromHEX(0xE04000);
-  else if(pt==PH_WALK) bg = GColorFromHEX(0x00AA55);
-  else                 bg = GColorFromHEX(0x0055AA);
+  GColor bg, fg;
+  #ifdef PBL_COLOR
+    fg = GColorWhite;
+    if(s_done)           bg = GColorIslamicGreen;
+    else if(pt==PH_RUN)  bg = GColorFromHEX(0xE04000);
+    else if(pt==PH_WALK) bg = GColorFromHEX(0x00AA55);
+    else                 bg = GColorFromHEX(0x0055AA);
+  #else
+    // B&W: invert for RUN to make it stand out
+    if(pt==PH_RUN && !s_done) { bg = GColorWhite; fg = GColorBlack; }
+    else                       { bg = GColorBlack; fg = GColorWhite; }
+  #endif
 
   graphics_context_set_fill_color(ctx, bg);
   graphics_fill_rect(ctx, b, 0, GCornerNone);
 
-  // Progress ring
-  GRect ring = grect_inset(b, GEdgeInsets(3));
-  graphics_context_set_fill_color(ctx, GColorBlack);
-  graphics_fill_radial(ctx, ring, GOvalScaleModeFitCircle, 8, 0, TRIG_MAX_ANGLE);
-  if(s_tot_dur > 0) {
-    int elapsed = s_tot_dur - s_tot_rem;
-    int prog_deg = (elapsed * 360) / s_tot_dur;
-    if(s_done) prog_deg = 360;
-    if(prog_deg > 0) {
+  // Progress indicator
+  int elapsed = s_tot_dur > 0 ? s_tot_dur - s_tot_rem : 0;
+  if(s_done) elapsed = s_tot_dur;
+  #ifdef PBL_ROUND
+    // Radial progress ring
+    GRect ring = grect_inset(b, GEdgeInsets(3));
+    graphics_context_set_fill_color(ctx, GColorBlack);
+    graphics_fill_radial(ctx, ring, GOvalScaleModeFitCircle, 8, 0, TRIG_MAX_ANGLE);
+    if(elapsed > 0 && s_tot_dur > 0) {
+      int prog_deg = (elapsed * 360) / s_tot_dur;
       graphics_context_set_fill_color(ctx, GColorWhite);
       graphics_fill_radial(ctx, ring, GOvalScaleModeFitCircle, 8,
         DEG_TO_TRIGANGLE(-90), DEG_TO_TRIGANGLE(-90 + prog_deg));
     }
-  }
+  #else
+    // Horizontal progress bar at top
+    int bar_h = 6;
+    graphics_context_set_fill_color(ctx, GColorBlack);
+    graphics_fill_rect(ctx, GRect(0, 0, w, bar_h), 0, GCornerNone);
+    if(elapsed > 0 && s_tot_dur > 0) {
+      int fill_w = (elapsed * w) / s_tot_dur;
+      graphics_context_set_fill_color(ctx, GColorWhite);
+      graphics_fill_rect(ctx, GRect(0, 0, fill_w, bar_h), 0, GCornerNone);
+    }
+  #endif
+
+  // Relative Y positions (percentage of screen height)
+  int y_hdr   = h * 12 / 100;
+  int y_phase = h * 20 / 100;
+  int y_count = h * 34 / 100;
+  int y_rem   = h * 56 / 100;
+  int y_motiv = h * 66 / 100;
+  #ifdef PBL_RECT
+    // Shift down slightly on rect to account for progress bar
+    y_hdr += 4;
+    y_phase += 2;
+  #endif
 
   // Fonts
   GFont f28 = fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD);
   GFont f42 = fonts_get_system_font(FONT_KEY_LECO_42_NUMBERS);
   GFont f18 = fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD);
   GFont f14 = fonts_get_system_font(FONT_KEY_GOTHIC_14);
-  graphics_context_set_text_color(ctx, GColorWhite);
+  graphics_context_set_text_color(ctx, fg);
 
   if(s_done) {
     // Completion screen
+    int y0 = h * 21 / 100;
     graphics_draw_text(ctx, "DONE!", f28,
-      GRect(0,55,w,34), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+      GRect(0,y0,w,34), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
     char buf[32];
     snprintf(buf, sizeof(buf), "Week %d Day %d", s_wk+1, s_day+1);
     graphics_draw_text(ctx, buf, f18,
-      GRect(0,95,w,24), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+      GRect(0,y0+40,w,24), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
     char tbuf[8];
     fmt_ms(tbuf, sizeof(tbuf), s_tot_dur);
     snprintf(buf, sizeof(buf), "%s completed!", tbuf);
     graphics_draw_text(ctx, buf, f18,
-      GRect(0,120,w,24), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+      GRect(0,y0+65,w,24), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
     graphics_draw_text(ctx, s_motiv[s_mi], f18,
-      GRect(20,158,w-40,40), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+      GRect(10,y0+100,w-20,40), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
     return;
   }
 
@@ -275,37 +306,41 @@ static void run_draw(Layer *l, GContext *ctx) {
   char hdr[16];
   snprintf(hdr, sizeof(hdr), "W%d D%d", s_wk+1, s_day+1);
   graphics_draw_text(ctx, hdr, f14,
-    GRect(0,30,w,18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+    GRect(0,y_hdr,w,18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
 
   // Phase name
   graphics_draw_text(ctx, s_ph_name[pt], f28,
-    GRect(0,50,w,34), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+    GRect(0,y_phase,w,34), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
 
   // Phase countdown (big)
   char pbuf[8];
   fmt_ms(pbuf, sizeof(pbuf), s_ph_rem);
   graphics_draw_text(ctx, pbuf, f42,
-    GRect(0,88,w,50), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+    GRect(0,y_count,w,50), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
 
   // Total remaining
   char obuf[24], tmp[8];
   fmt_ms(tmp, sizeof(tmp), s_tot_rem);
   snprintf(obuf, sizeof(obuf), "%s remaining", tmp);
   graphics_draw_text(ctx, obuf, f14,
-    GRect(0,145,w,18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+    GRect(0,y_rem,w,18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
 
   // Motivation
   graphics_draw_text(ctx, s_motiv[s_mi], f18,
-    GRect(20,170,w-40,40), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+    GRect(10,y_motiv,w-20,40), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
 
   // Paused overlay
   if(s_paused) {
     graphics_context_set_fill_color(ctx, GColorBlack);
-    graphics_fill_rect(ctx, GRect(w/2-75, b.size.h/2-18, 150, 38), 8, GCornersAll);
+    int bx = w/2-75, bw = 150;
+    #ifdef PBL_RECT
+    bx = 2; bw = w-4;
+    #endif
+    graphics_fill_rect(ctx, GRect(bx, h/2-18, bw, 38), 8, GCornersAll);
     graphics_context_set_text_color(ctx, GColorWhite);
     const char *ptxt = s_started ? "PAUSED" : "SELECT to Start";
     GFont pf = s_started ? f28 : f18;
-    int py = s_started ? b.size.h/2-16 : b.size.h/2-12;
+    int py = s_started ? h/2-16 : h/2-12;
     graphics_draw_text(ctx, ptxt, pf,
       GRect(0,py,w,34), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
   }
