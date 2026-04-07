@@ -215,6 +215,117 @@ static void init_session(void) {
 // ============================================================================
 // RUN SCREEN DRAWING
 // ============================================================================
+
+// Phase color helper
+static GColor phase_color(uint8_t type) {
+  #ifdef PBL_COLOR
+  switch(type) {
+    case PH_RUN:  return GColorFromHEX(0xE04000);
+    case PH_WALK: return GColorFromHEX(0x00AA55);
+    default:      return GColorFromHEX(0x0055AA);
+  }
+  #else
+  return GColorWhite;
+  #endif
+}
+
+// Tiny pixel race car
+static void draw_car(GContext *ctx, int cx, int top_y) {
+  // Roof
+  graphics_context_set_fill_color(ctx, GColorWhite);
+  graphics_fill_rect(ctx, GRect(cx-2, top_y, 5, 2), 0, GCornerNone);
+  // Body
+  graphics_fill_rect(ctx, GRect(cx-4, top_y+2, 9, 3), 0, GCornerNone);
+  // Windshield
+  #ifdef PBL_COLOR
+  graphics_context_set_fill_color(ctx, GColorPictonBlue);
+  graphics_fill_rect(ctx, GRect(cx+1, top_y+2, 3, 2), 0, GCornerNone);
+  #endif
+  // Wheels
+  graphics_context_set_fill_color(ctx, GColorBlack);
+  graphics_fill_rect(ctx, GRect(cx-3, top_y+5, 2, 2), 0, GCornerNone);
+  graphics_fill_rect(ctx, GRect(cx+2, top_y+5, 2, 2), 0, GCornerNone);
+}
+
+// Checkered finish flag
+static void draw_flag(GContext *ctx, int fx, int fy) {
+  for(int dy=0; dy<8; dy++)
+    for(int dx=0; dx<4; dx++) {
+      graphics_context_set_fill_color(ctx,
+        ((dx+dy)%2==0) ? GColorWhite : GColorBlack);
+      graphics_fill_rect(ctx, GRect(fx+dx, fy+dy, 1, 1), 0, GCornerNone);
+    }
+}
+
+// Session progress bar: colored segments per phase, car marker, grayed completion
+static void draw_session_bar(GContext *ctx, int bw, int bh, int bar_w, int bar_h, int bar_y) {
+  int bar_x = (bw - bar_w) / 2;
+  int o = s_sess[s_si][0], n = s_sess[s_si][1];
+
+  // Elapsed seconds into current phase
+  int phase_elapsed = s_phases[o+s_pi].dur - s_ph_rem;
+
+  // Total elapsed seconds
+  int total_elapsed = 0;
+  for(int i = 0; i < s_pi; i++) total_elapsed += s_phases[o+i].dur;
+  total_elapsed += phase_elapsed;
+  if(s_done) total_elapsed = s_tot_dur;
+
+  // Draw each phase segment
+  int x = bar_x;
+  for(int i = 0; i < n; i++) {
+    int seg_w = (s_phases[o+i].dur * bar_w) / s_tot_dur;
+    if(i == n-1) seg_w = bar_x + bar_w - x;  // Fill remainder
+    if(seg_w < 1) seg_w = 1;
+
+    if(i < s_pi) {
+      // Completed: gray
+      graphics_context_set_fill_color(ctx, GColorDarkGray);
+      graphics_fill_rect(ctx, GRect(x, bar_y, seg_w, bar_h), 0, GCornerNone);
+    } else if(i == s_pi && !s_done) {
+      // Current phase: gray for elapsed portion, color for remaining
+      int dur = s_phases[o+i].dur;
+      int gray_w = dur > 0 ? (phase_elapsed * seg_w) / dur : 0;
+      if(gray_w > 0) {
+        graphics_context_set_fill_color(ctx, GColorDarkGray);
+        graphics_fill_rect(ctx, GRect(x, bar_y, gray_w, bar_h), 0, GCornerNone);
+      }
+      graphics_context_set_fill_color(ctx, phase_color(s_phases[o+i].type));
+      graphics_fill_rect(ctx, GRect(x+gray_w, bar_y, seg_w-gray_w, bar_h), 0, GCornerNone);
+    } else if(s_done) {
+      // All done: everything gray
+      graphics_context_set_fill_color(ctx, GColorDarkGray);
+      graphics_fill_rect(ctx, GRect(x, bar_y, seg_w, bar_h), 0, GCornerNone);
+    } else {
+      // Future: full phase color
+      graphics_context_set_fill_color(ctx, phase_color(s_phases[o+i].type));
+      graphics_fill_rect(ctx, GRect(x, bar_y, seg_w, bar_h), 0, GCornerNone);
+    }
+
+    // Segment separator
+    if(i < n-1 && seg_w > 2) {
+      graphics_context_set_fill_color(ctx, GColorBlack);
+      graphics_fill_rect(ctx, GRect(x+seg_w-1, bar_y, 1, bar_h), 0, GCornerNone);
+    }
+    x += seg_w;
+  }
+
+  // Border
+  graphics_context_set_stroke_color(ctx, GColorWhite);
+  graphics_draw_rect(ctx, GRect(bar_x-1, bar_y-1, bar_w+2, bar_h+2));
+
+  // Checkered flag at finish
+  draw_flag(ctx, bar_x + bar_w + 3, bar_y + (bar_h-8)/2);
+
+  // Race car marker above bar
+  int car_x = s_tot_dur > 0
+    ? bar_x + (total_elapsed * bar_w) / s_tot_dur
+    : bar_x;
+  if(car_x < bar_x) car_x = bar_x;
+  if(car_x > bar_x + bar_w) car_x = bar_x + bar_w;
+  draw_car(ctx, car_x, bar_y - 9);
+}
+
 static void run_draw(Layer *l, GContext *ctx) {
   GRect b = layer_get_bounds(l);
   int w=b.size.w, h=b.size.h;
@@ -230,7 +341,6 @@ static void run_draw(Layer *l, GContext *ctx) {
     else if(pt==PH_WALK) bg = GColorFromHEX(0x00AA55);
     else                 bg = GColorFromHEX(0x0055AA);
   #else
-    // B&W: invert for RUN to make it stand out
     if(pt==PH_RUN && !s_done) { bg = GColorWhite; fg = GColorBlack; }
     else                       { bg = GColorBlack; fg = GColorWhite; }
   #endif
@@ -238,43 +348,22 @@ static void run_draw(Layer *l, GContext *ctx) {
   graphics_context_set_fill_color(ctx, bg);
   graphics_fill_rect(ctx, b, 0, GCornerNone);
 
-  // Progress indicator
-  int elapsed = s_tot_dur > 0 ? s_tot_dur - s_tot_rem : 0;
-  if(s_done) elapsed = s_tot_dur;
+  // Layout: session bar dimensions
+  int bar_h = 14;
+  int bar_w, bar_y;
   #ifdef PBL_ROUND
-    // Radial progress ring
-    GRect ring = grect_inset(b, GEdgeInsets(3));
-    graphics_context_set_fill_color(ctx, GColorBlack);
-    graphics_fill_radial(ctx, ring, GOvalScaleModeFitCircle, 8, 0, TRIG_MAX_ANGLE);
-    if(elapsed > 0 && s_tot_dur > 0) {
-      int prog_deg = (elapsed * 360) / s_tot_dur;
-      graphics_context_set_fill_color(ctx, GColorWhite);
-      graphics_fill_radial(ctx, ring, GOvalScaleModeFitCircle, 8,
-        DEG_TO_TRIGANGLE(-90), DEG_TO_TRIGANGLE(-90 + prog_deg));
-    }
+  bar_w = w * 72 / 100;
   #else
-    // Horizontal progress bar at top
-    int bar_h = 6;
-    graphics_context_set_fill_color(ctx, GColorBlack);
-    graphics_fill_rect(ctx, GRect(0, 0, w, bar_h), 0, GCornerNone);
-    if(elapsed > 0 && s_tot_dur > 0) {
-      int fill_w = (elapsed * w) / s_tot_dur;
-      graphics_context_set_fill_color(ctx, GColorWhite);
-      graphics_fill_rect(ctx, GRect(0, 0, fill_w, bar_h), 0, GCornerNone);
-    }
+  bar_w = w * 82 / 100;
   #endif
+  bar_y = h * 50 / 100;
 
-  // Relative Y positions (percentage of screen height)
-  int y_hdr   = h * 12 / 100;
-  int y_phase = h * 20 / 100;
-  int y_count = h * 34 / 100;
-  int y_rem   = h * 56 / 100;
-  int y_motiv = h * 66 / 100;
-  #ifdef PBL_RECT
-    // Shift down slightly on rect to account for progress bar
-    y_hdr += 4;
-    y_phase += 2;
-  #endif
+  // Relative Y positions
+  int y_hdr   = h * 10 / 100;
+  int y_phase = h * 17 / 100;
+  int y_count = h * 30 / 100;
+  int y_rem   = h * 58 / 100;
+  int y_motiv = h * 68 / 100;
 
   // Fonts
   GFont f28 = fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD);
@@ -283,22 +372,24 @@ static void run_draw(Layer *l, GContext *ctx) {
   GFont f14 = fonts_get_system_font(FONT_KEY_GOTHIC_14);
   graphics_context_set_text_color(ctx, fg);
 
+  // Session bar (shown on both run and done screens)
+  draw_session_bar(ctx, w, h, bar_w, bar_h, bar_y);
+
   if(s_done) {
-    // Completion screen
-    int y0 = h * 21 / 100;
+    // Completion screen — text above and below bar
     graphics_draw_text(ctx, "DONE!", f28,
-      GRect(0,y0,w,34), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+      GRect(0, y_hdr+5, w, 34), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
     char buf[32];
     snprintf(buf, sizeof(buf), "Week %d Day %d", s_wk+1, s_day+1);
     graphics_draw_text(ctx, buf, f18,
-      GRect(0,y0+40,w,24), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+      GRect(0, y_count, w, 24), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
     char tbuf[8];
     fmt_ms(tbuf, sizeof(tbuf), s_tot_dur);
     snprintf(buf, sizeof(buf), "%s completed!", tbuf);
     graphics_draw_text(ctx, buf, f18,
-      GRect(0,y0+65,w,24), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+      GRect(0, y_rem, w, 24), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
     graphics_draw_text(ctx, s_motiv[s_mi], f18,
-      GRect(10,y0+100,w-20,40), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+      GRect(10, y_motiv, w-20, 40), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
     return;
   }
 
@@ -332,11 +423,11 @@ static void run_draw(Layer *l, GContext *ctx) {
   // Paused overlay
   if(s_paused) {
     graphics_context_set_fill_color(ctx, GColorBlack);
-    int bx = w/2-75, bw = 150;
+    int bx = w/2-75, bxw = 150;
     #ifdef PBL_RECT
-    bx = 2; bw = w-4;
+    bx = 2; bxw = w-4;
     #endif
-    graphics_fill_rect(ctx, GRect(bx, h/2-18, bw, 38), 8, GCornersAll);
+    graphics_fill_rect(ctx, GRect(bx, h/2-18, bxw, 38), 8, GCornersAll);
     graphics_context_set_text_color(ctx, GColorWhite);
     const char *ptxt = s_started ? "PAUSED" : "SELECT to Start";
     GFont pf = s_started ? f28 : f18;
