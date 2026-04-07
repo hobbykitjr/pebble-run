@@ -351,8 +351,8 @@ static void draw_session_bar(GContext *ctx, int bw, int bh, int bar_w, int bar_h
   graphics_context_set_stroke_color(ctx, GColorWhite);
   graphics_draw_rect(ctx, GRect(bar_x-1, bar_y-1, bar_w+2, bar_h+2));
 
-  // Checkered flag at finish
-  draw_flag(ctx, bar_x + bar_w + 4, bar_y + (bar_h-8)/2);
+  // Checkered flag above the right end of bar
+  draw_flag(ctx, bar_x + bar_w - 4, bar_y - 12);
 
   // Race car marker above bar
   int car_x = s_tot_dur > 0
@@ -385,21 +385,21 @@ static void run_draw(Layer *l, GContext *ctx) {
   graphics_context_set_fill_color(ctx, bg);
   graphics_fill_rect(ctx, b, 0, GCornerNone);
 
-  // Session bar dimensions
+  // Session bar: centered at widest point, stretched wide
   int bar_h = 18;
   int bar_w;
   #ifdef PBL_ROUND
-  bar_w = w * 68 / 100;   // Leave room for flag
+  bar_w = w * 82 / 100;   // Wide — flag is above, not beside
   #else
-  bar_w = w * 78 / 100;
+  bar_w = w * 90 / 100;
   #endif
-  int bar_y = h * 55 / 100;
+  int bar_y = h * 50 / 100;  // Dead center
 
-  // Relative Y positions (no motivation text = more breathing room)
-  int y_hdr   = h * 10 / 100;
-  int y_phase = h * 18 / 100;
-  int y_count = h * 30 / 100;
-  int y_rem   = h * 70 / 100;
+  // Layout: phase+countdown above bar, remaining+W/D below
+  int y_phase = h * 10 / 100;
+  int y_count = h * 22 / 100;
+  int y_rem   = h * 60 / 100;
+  int y_hdr   = h * 74 / 100;
 
   // Fonts
   GFont f28 = fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD);
@@ -412,45 +412,46 @@ static void run_draw(Layer *l, GContext *ctx) {
   draw_session_bar(ctx, w, h, bar_w, bar_h, bar_y);
 
   if(s_done) {
+    // DONE text above bar
     graphics_draw_text(ctx, "DONE!", f28,
-      GRect(0, y_hdr+5, w, 34), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+      GRect(0, y_phase, w, 34), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
     char buf[32];
     snprintf(buf, sizeof(buf), "Week %d Day %d", s_wk+1, s_day+1);
     graphics_draw_text(ctx, buf, f18,
-      GRect(0, y_count, w, 24), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+      GRect(0, y_count+4, w, 24), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+    // Completed time + motivation below bar
     char tbuf[8];
     fmt_ms(tbuf, sizeof(tbuf), s_tot_dur);
     snprintf(buf, sizeof(buf), "%s completed!", tbuf);
-    graphics_draw_text(ctx, buf, f14,
-      GRect(0, y_rem-8, w, 18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
-    // Motivation only on done screen
+    graphics_draw_text(ctx, buf, f18,
+      GRect(0, y_rem, w, 22), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
     graphics_draw_text(ctx, s_motiv[s_mi], f18,
-      GRect(10, y_rem+10, w-20, 40), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+      GRect(10, y_hdr-4, w-20, 40), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
     return;
   }
 
-  // Week/Day header
-  char hdr[16];
-  snprintf(hdr, sizeof(hdr), "W%d D%d", s_wk+1, s_day+1);
-  graphics_draw_text(ctx, hdr, f14,
-    GRect(0,y_hdr,w,18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
-
-  // Phase name
+  // Phase name (top)
   graphics_draw_text(ctx, s_ph_name[pt], f28,
     GRect(0,y_phase,w,34), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
 
-  // Phase countdown (big)
+  // Phase countdown (big, above bar)
   char pbuf[8];
   fmt_ms(pbuf, sizeof(pbuf), s_ph_rem);
   graphics_draw_text(ctx, pbuf, f42,
     GRect(0,y_count,w,50), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
 
-  // Total remaining
+  // Total remaining (below bar)
   char obuf[24], tmp[8];
   fmt_ms(tmp, sizeof(tmp), s_tot_rem);
   snprintf(obuf, sizeof(obuf), "%s remaining", tmp);
   graphics_draw_text(ctx, obuf, f18,
     GRect(0,y_rem,w,22), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+
+  // Week/Day (bottom)
+  char hdr[16];
+  snprintf(hdr, sizeof(hdr), "W%d D%d", s_wk+1, s_day+1);
+  graphics_draw_text(ctx, hdr, f14,
+    GRect(0,y_hdr,w,18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
 
   // Paused overlay
   if(s_paused) {
