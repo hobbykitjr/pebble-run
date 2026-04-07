@@ -1,0 +1,23 @@
+{
+  "name": "pebble-c25k",
+  "author": "Hobbykitjr",
+  "version": "1.0.0",
+  "keywords": ["pebble-app"],
+  "private": true,
+  "dependencies": {},
+  "pebble": {
+    "displayName": "Pixel Run C25K",
+    "uuid": "d8f2a1b3-4c5e-6f78-9a0b-1c2d3e4f5a6b",
+    "sdkVersion": "3",
+    "enableMultiJS": false,
+    "targetPlatforms": ["gabbro"],
+    "capabilities": [],
+    "messageKeys": {},
+    "watchapp": {
+      "watchface": false
+    },
+    "resources": {
+      "media": []
+    }
+  }
+}
