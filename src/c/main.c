@@ -339,8 +339,8 @@ static void draw_session_bar(GContext *ctx, int bw, int bh, int bar_w, int bar_h
       graphics_fill_rect(ctx, GRect(x, bar_y, seg_w, bar_h), 0, GCornerNone);
     }
 
-    // Segment separator
-    if(i < n-1 && seg_w > 2) {
+    // Segment separator only between wide segments (avoids clutter on W1)
+    if(i < n-1 && seg_w > 8) {
       graphics_context_set_fill_color(ctx, GColorBlack);
       graphics_fill_rect(ctx, GRect(x+seg_w-1, bar_y, 1, bar_h), 0, GCornerNone);
     }
@@ -386,21 +386,20 @@ static void run_draw(Layer *l, GContext *ctx) {
   graphics_fill_rect(ctx, b, 0, GCornerNone);
 
   // Session bar dimensions
-  int bar_h = 16;
+  int bar_h = 18;
   int bar_w;
   #ifdef PBL_ROUND
   bar_w = w * 68 / 100;   // Leave room for flag
   #else
   bar_w = w * 78 / 100;
   #endif
-  int bar_y = h * 50 / 100;
+  int bar_y = h * 55 / 100;
 
-  // Relative Y positions
+  // Relative Y positions (no motivation text = more breathing room)
   int y_hdr   = h * 10 / 100;
-  int y_phase = h * 17 / 100;
+  int y_phase = h * 18 / 100;
   int y_count = h * 30 / 100;
-  int y_rem   = h * 60 / 100;
-  int y_motiv = h * 70 / 100;
+  int y_rem   = h * 70 / 100;
 
   // Fonts
   GFont f28 = fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD);
@@ -422,10 +421,11 @@ static void run_draw(Layer *l, GContext *ctx) {
     char tbuf[8];
     fmt_ms(tbuf, sizeof(tbuf), s_tot_dur);
     snprintf(buf, sizeof(buf), "%s completed!", tbuf);
-    graphics_draw_text(ctx, buf, f18,
-      GRect(0, y_rem, w, 24), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+    graphics_draw_text(ctx, buf, f14,
+      GRect(0, y_rem-8, w, 18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+    // Motivation only on done screen
     graphics_draw_text(ctx, s_motiv[s_mi], f18,
-      GRect(10, y_motiv, w-20, 40), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+      GRect(10, y_rem+10, w-20, 40), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
     return;
   }
 
@@ -449,12 +449,8 @@ static void run_draw(Layer *l, GContext *ctx) {
   char obuf[24], tmp[8];
   fmt_ms(tmp, sizeof(tmp), s_tot_rem);
   snprintf(obuf, sizeof(obuf), "%s remaining", tmp);
-  graphics_draw_text(ctx, obuf, f14,
-    GRect(0,y_rem,w,18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
-
-  // Motivation
-  graphics_draw_text(ctx, s_motiv[s_mi], f18,
-    GRect(10,y_motiv,w-20,40), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+  graphics_draw_text(ctx, obuf, f18,
+    GRect(0,y_rem,w,22), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
 
   // Paused overlay
   if(s_paused) {
