@@ -850,11 +850,11 @@ static void day_draw(GContext *ctx, const Layer *cell, MenuIndex *idx, void *dat
     graphics_context_set_fill_color(ctx, GColorFromHEX(0x0055AA));
     graphics_fill_rect(ctx, cb, 0, GCornerNone);
   }
-  // Horizontal session preview bar at bottom (skip on selected)
-  if(!selected) {
+  // Session preview bar under subtitle text
+  {
     int o=s_sess[si][0], n=s_sess[si][1];
     int bar_h = 3;
-    int bar_y = cb.size.h - bar_h;
+    int bar_y = 50;
     int bar_margin = 10;
     int bar_w = cb.size.w - bar_margin * 2;
     int bx = bar_margin;
@@ -973,16 +973,14 @@ static void wk_draw(GContext *ctx, const Layer *cell, MenuIndex *idx, void *data
     graphics_context_set_fill_color(ctx, GColorFromHEX(0x0055AA));
     graphics_fill_rect(ctx, cb, 0, GCornerNone);
   }
-  // Horizontal color bar at bottom (skip on selected row to avoid confusion)
-  if(!selected) {
-    GColor accent;
-    if(row < 3)      accent = GColorFromHEX(0x00AA55);
-    else if(row < 6) accent = GColorFromHEX(0xE0A000);
-    else             accent = GColorFromHEX(0xE04000);
-    if(done_cnt == 3) accent = GColorDarkGray;
-    graphics_context_set_fill_color(ctx, accent);
-    graphics_fill_rect(ctx, GRect(10, cb.size.h-3, cb.size.w-20, 3), 0, GCornerNone);
-  }
+  // Color bar under subtitle text
+  GColor accent;
+  if(row < 3)      accent = GColorFromHEX(0x00AA55);
+  else if(row < 6) accent = GColorFromHEX(0xE0A000);
+  else             accent = GColorFromHEX(0xE04000);
+  if(done_cnt == 3) accent = GColorDarkGray;
+  graphics_context_set_fill_color(ctx, accent);
+  graphics_fill_rect(ctx, GRect(10, 50, cb.size.w-20, 3), 0, GCornerNone);
   #endif
 
   // Title
