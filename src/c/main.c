@@ -162,7 +162,8 @@ static bool s_sim_hr=false;     // Simulate HR on emery emulator
 // Step tracking (gabbro/chalk)
 static int s_steps=0;
 static bool s_step_high=false;
-static int s_confetti=0;  // Confetti animation frame
+static int s_confetti=0;
+static AppTimer *s_confetti_timer=NULL;
 
 // ============================================================================
 // COMPLETION TRACKING
@@ -233,6 +234,7 @@ static void next_phase(void) {
     s_done = true;
     vib_done();
     mark_complete(s_wk, s_day);
+    start_confetti();
     return;
   }
   int o=s_sess[s_si][0];
@@ -513,18 +515,14 @@ static void run_draw(Layer *l, GContext *ctx) {
     #ifdef PBL_PLATFORM_EMERY
     if(s_hr_count > 0) {
       int avg = s_hr_sum / s_hr_count;
-      snprintf(buf, sizeof(buf), "%s  Avg %d  Peak %d", tbuf, avg, s_hr_peak);
-    } else {
-      snprintf(buf, sizeof(buf), "%s completed!", tbuf);
-    }
+      snprintf(buf, sizeof(buf), "%s | Avg %d Peak %d", tbuf, avg, s_hr_peak);
+    } else
     #else
-    if(s_steps > 0) {
-      draw_shoe(ctx, w/2-45, y_rem+4, GColorWhite);
+    if(s_steps > 0)
       snprintf(buf, sizeof(buf), "%s | %d steps", tbuf, s_steps);
-    } else {
-      snprintf(buf, sizeof(buf), "%s completed!", tbuf);
-    }
+    else
     #endif
+      snprintf(buf, sizeof(buf), "%s completed!", tbuf);
     graphics_context_set_text_color(ctx, fg);
     graphics_draw_text(ctx, buf, f_info,
       GRect(0, y_rem, w, 22), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
@@ -559,12 +557,23 @@ static void run_draw(Layer *l, GContext *ctx) {
   }
   #else
   if(s_steps > 0) {
-    draw_shoe(ctx, w/2-22, y_step+3, GColorWhite);
-    char step_buf[12]; snprintf(step_buf,sizeof(step_buf),"%d",s_steps);
-    graphics_context_set_text_color(ctx, GColorWhite);
-    graphics_draw_text(ctx,step_buf,f_info,
-      GRect(w/2-12,y_step-1,60,22), GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
-    graphics_context_set_text_color(ctx, fg);
+    if(big) {
+      // Gabbro: shoe + steps above bar
+      draw_shoe(ctx, w/2-22, y_step+3, GColorWhite);
+      char step_buf[12]; snprintf(step_buf,sizeof(step_buf),"%d",s_steps);
+      graphics_context_set_text_color(ctx, GColorWhite);
+      graphics_draw_text(ctx,step_buf,f_info,
+        GRect(w/2-12,y_step-1,60,22), GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
+      graphics_context_set_text_color(ctx, fg);
+    } else {
+      // Chalk: shoe + steps at bottom next to W/D
+      draw_shoe(ctx, w/2+12, y_extra+4, GColorWhite);
+      char step_buf[12]; snprintf(step_buf,sizeof(step_buf),"%d",s_steps);
+      graphics_context_set_text_color(ctx, GColorWhite);
+      graphics_draw_text(ctx,step_buf,f_sm,
+        GRect(w/2+22,y_extra+1,40,18), GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
+      graphics_context_set_text_color(ctx, fg);
+    }
   }
   #endif
 
@@ -643,15 +652,24 @@ static void run_draw(Layer *l, GContext *ctx) {
 }
 
 // ============================================================================
+// CONFETTI TIMER (fast animation on done screen)
+// ============================================================================
+static void confetti_cb(void *data) {
+  s_confetti++;
+  if(s_run_layer) layer_mark_dirty(s_run_layer);
+  s_confetti_timer = app_timer_register(80, confetti_cb, NULL);
+}
+static void start_confetti(void) {
+  s_confetti = 0;
+  if(s_confetti_timer) { app_timer_cancel(s_confetti_timer); s_confetti_timer=NULL; }
+  s_confetti_timer = app_timer_register(80, confetti_cb, NULL);
+}
+
+// ============================================================================
 // RUN TICK
 // ============================================================================
 static void run_tick(struct tm *t, TimeUnits u) {
-  // Keep confetti animating on done screen
-  if(s_done) {
-    s_confetti++;
-    if(s_run_layer) layer_mark_dirty(s_run_layer);
-    return;
-  }
+  if(s_done) return;
   if(!s_started || s_paused) return;
   s_ph_rem--;
   s_tot_rem--;
@@ -727,6 +745,7 @@ static void run_sel(ClickRecognizerRef ref, void *ctx) {
         s_done = true;
         mark_complete(s_wk, s_day);
         vib_done();
+        start_confetti();
         break;
       case 2: // Quit — exit without completing
         window_stack_pop(true);
@@ -770,6 +789,7 @@ static void run_load(Window *w) {
 static void run_unload(Window *w) {
   tick_timer_service_unsubscribe();
   accel_data_service_unsubscribe();
+  if(s_confetti_timer) { app_timer_cancel(s_confetti_timer); s_confetti_timer=NULL; }
   if(s_run_layer) { layer_destroy(s_run_layer); s_run_layer = NULL; }
 }
 
@@ -800,8 +820,8 @@ static void day_draw(GContext *ctx, const Layer *cell, MenuIndex *idx, void *dat
   }
   // Horizontal session preview bar at bottom of cell
   int o=s_sess[si][0], n=s_sess[si][1];
-  int bar_h = 5;
-  int bar_y = cb.size.h - bar_h - 2;
+  int bar_h = 4;
+  int bar_y = cb.size.h - bar_h;
   int bar_margin = 10;
   int bar_w = cb.size.w - bar_margin * 2;
   int bx = bar_margin;
@@ -834,12 +854,12 @@ static void day_draw(GContext *ctx, const Layer *cell, MenuIndex *idx, void *dat
   GFont ft = fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD);
   GFont fs = fonts_get_system_font(FONT_KEY_GOTHIC_14);
   graphics_draw_text(ctx, title, ft,
-    GRect(tx, 8, cb.size.w-tx-16, 28), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+    GRect(tx, 4, cb.size.w-tx-16, 28), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
 
   char sub[40];
   snprintf(sub, sizeof(sub), "%s (%d min)", s_sess_desc[si], sess_dur(si)/60);
   graphics_draw_text(ctx, sub, fs,
-    GRect(tx, 36, cb.size.w-tx-16, 18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+    GRect(tx, 30, cb.size.w-tx-16, 18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
 
   // Green check circle for completed
   #ifdef PBL_COLOR
@@ -926,8 +946,7 @@ static void wk_draw(GContext *ctx, const Layer *cell, MenuIndex *idx, void *data
   else             accent = GColorFromHEX(0xE04000);  // Late: orange
   if(done_cnt == 3) accent = GColorDarkGray;           // All done: muted
   graphics_context_set_fill_color(ctx, accent);
-  int ab_y = cb.size.h - 6;
-  graphics_fill_rect(ctx, GRect(10, ab_y, cb.size.w-20, 4), 0, GCornerNone);
+  graphics_fill_rect(ctx, GRect(10, cb.size.h-4, cb.size.w-20, 4), 0, GCornerNone);
   #endif
 
   // Title
