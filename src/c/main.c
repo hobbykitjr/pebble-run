@@ -151,23 +151,17 @@ static int s_mi;                // Motivation string index
 static uint32_t s_done_mask=0;  // Completion bitmask
 static int s_pause_sel=0;       // Pause menu: 0=Resume, 1=Complete, 2=Quit
 
-// Heart rate tracking
-#if PBL_API_EXISTS(health_service_peek_current_value)
-#define HAS_HR 1
-#else
-#define HAS_HR 0
-#endif
-static int s_hr_bpm=0;          // Current BPM (0 = no reading)
-static int s_hr_peak=0;         // Peak BPM during session
-static int s_hr_sum=0;          // Sum of all readings (for average)
-static int s_hr_count=0;        // Number of readings
+// Heart rate (emery only)
+static int s_hr_bpm=0;
+static int s_hr_peak=0;
+static int s_hr_sum=0;
+static int s_hr_count=0;
+static bool s_sim_hr=false;     // Simulate HR on emery emulator
+#define MAX_HR 190
 
-// Accelerometer step tracking (for watches without HR)
-static int s_steps=0;           // Step count during session
-static bool s_step_high=false;  // Was above threshold last sample
-static bool s_has_real_hr=false; // Got at least one real HR reading
-static bool s_sim_hr=false;     // Simulating HR for emulator demo
-#define MAX_HR 190              // Default max HR for zone calculation
+// Step tracking (gabbro/chalk)
+static int s_steps=0;
+static bool s_step_high=false;
 
 // ============================================================================
 // COMPLETION TRACKING
@@ -262,7 +256,7 @@ static void init_session(void) {
   s_half = false;
   s_mi = rand() % N_MOTIV;
   s_hr_bpm=0; s_hr_peak=0; s_hr_sum=0; s_hr_count=0;
-  s_steps=0; s_step_high=false; s_has_real_hr=false;
+  s_steps=0; s_step_high=false;
   // Simulate HR on emery (Time 2) emulator when no real sensor
   #ifdef PBL_PLATFORM_EMERY
   s_sim_hr=true;  // Will be disabled if real HR data arrives
@@ -301,20 +295,6 @@ static void draw_heart(GContext *ctx, int x, int y, GColor c) {
   graphics_fill_rect(ctx, GRect(x+1,y+3,5,1), 0, GCornerNone);
   graphics_fill_rect(ctx, GRect(x+2,y+4,3,1), 0, GCornerNone);
   graphics_fill_rect(ctx, GRect(x+3,y+5,1,1), 0, GCornerNone);
-}
-
-// Tiny shoe icon (7x5)
-static void draw_shoe(GContext *ctx, int x, int y, GColor c) {
-  graphics_context_set_fill_color(ctx, c);
-  // Ankle/top
-  graphics_fill_rect(ctx, GRect(x,y,3,2), 0, GCornerNone);
-  // Sole (wider)
-  graphics_fill_rect(ctx, GRect(x-1,y+2,6,2), 0, GCornerNone);
-  // Toe
-  graphics_fill_rect(ctx, GRect(x+5,y+2,2,2), 0, GCornerNone);
-  // Tread
-  graphics_context_set_fill_color(ctx, GColorBlack);
-  graphics_fill_rect(ctx, GRect(x-1,y+4,8,1), 0, GCornerNone);
 }
 
 // Phase color helper
@@ -653,13 +633,16 @@ static void run_tick(struct tm *t, TimeUnits u) {
   #ifdef PBL_PLATFORM_EMERY
   {
     // Real HR from sensor
-    #if HAS_HR
-    HealthValue hv = health_service_peek_current_value(HealthMetricHeartRateBPM);
-    if((int)hv >= 30 && (int)hv <= 220) {
-      s_hr_bpm = (int)hv;
-      if(s_hr_bpm > s_hr_peak) s_hr_peak = s_hr_bpm;
-      s_hr_sum += s_hr_bpm;
-      s_hr_count++;
+    #ifdef PBL_HEALTH
+    {
+      HealthValue hv = health_service_peek_current_value(HealthMetricHeartRateBPM);
+      if((int)hv >= 30 && (int)hv <= 220) {
+        s_hr_bpm = (int)hv;
+        s_sim_hr = false;  // Real data, stop simulating
+        if(s_hr_bpm > s_hr_peak) s_hr_peak = s_hr_bpm;
+        s_hr_sum += s_hr_bpm;
+        s_hr_count++;
+      }
     }
     #endif
     // Simulate HR on emery emulator when no real data
