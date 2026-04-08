@@ -494,7 +494,7 @@ static void run_draw(Layer *l, GContext *ctx) {
     // Stats below bar
     char tbuf[8];
     fmt_ms(tbuf, sizeof(tbuf), s_tot_dur);
-    if(s_has_real_hr || s_sim_hr) {
+    if(s_hr_count > 0) {
       int avg = s_hr_sum / s_hr_count;
       snprintf(buf, sizeof(buf), "%s completed!", tbuf);
       graphics_draw_text(ctx, buf, f14,
@@ -551,7 +551,7 @@ static void run_draw(Layer *l, GContext *ctx) {
   char hdr[16];
   snprintf(hdr, sizeof(hdr), "W%d D%d", s_wk+1, s_day+1);
 
-  if(s_hr_bpm > 0 && s_sim_hr) {
+  if(s_hr_bpm > 0 && s_hr_count > 0) {
     // Show W/D on left, heart+BPM on right
     graphics_draw_text(ctx, hdr, f14,
       GRect(20,y_hdr,w/2-20,18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
@@ -660,7 +660,6 @@ static void run_tick(struct tm *t, TimeUnits u) {
     // Only accept reasonable BPM values (30-220), ignore error codes
     if((int)hv >= 30 && (int)hv <= 220) {
       s_hr_bpm = (int)hv;
-      s_has_real_hr = true;
       s_sim_hr = false;
       if(s_hr_bpm > s_hr_peak) s_hr_peak = s_hr_bpm;
       s_hr_sum += s_hr_bpm;
