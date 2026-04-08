@@ -484,12 +484,13 @@ static void run_draw(Layer *l, GContext *ctx) {
     {
       GColor confetti[] = {GColorRed,GColorYellow,GColorGreen,GColorCyan,
                            GColorOrange,GColorPurple,GColorMagenta,GColorPictonBlue};
-      int seed = s_anim_ms * 31 + 7;
+      int elapsed = s_tot_dur - s_tot_rem;
+      int seed = elapsed * 31 + 7;
       for(int i=0; i<25; i++) {
         seed = (seed * 1103515245 + 12345) & 0x7fffffff;
         int cx = seed % w;
         seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-        int cy = (seed % h + s_fire_frame * 4 + i * 17) % h;
+        int cy = (seed % h + elapsed * 4 + i * 17) % h;
         graphics_context_set_fill_color(ctx, confetti[i % 8]);
         int sz = 2 + (i % 3);
         graphics_fill_rect(ctx, GRect(cx, cy, sz, sz), 0, GCornerNone);
