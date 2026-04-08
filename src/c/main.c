@@ -677,13 +677,27 @@ static void run_tick(struct tm *t, TimeUnits u) {
     s_hr_sum += s_hr_bpm;
     s_hr_count++;
   }
-  // Accelerometer step counting (for watches without HR, when not simulating)
+  // Accelerometer step counting (for watches without HR, when not simulating HR)
   if(!s_has_real_hr && !s_sim_hr) {
     AccelData accel;
     accel_service_peek(&accel);
     int mag = abs(accel.x) + abs(accel.y) + abs(accel.z);
     if(mag > 1500 && !s_step_high) { s_steps++; s_step_high = true; }
     if(mag < 1200) s_step_high = false;
+    // Simulate steps when accel returns nothing (emulator)
+    if(mag < 100 && s_steps == 0 && s_anim_ms > 3000) {
+      // After 3 seconds with no real accel data, start simulating
+      int o2 = s_sess[s_si][0];
+      uint8_t pt2 = s_phases[o2+s_pi].type;
+      if(pt2 == PH_RUN) s_steps += 2 + (rand() % 2);       // ~2-3 steps/sec running
+      else if(pt2 == PH_WALK) s_steps += 1 + (rand() % 2);  // ~1-2 steps/sec walking
+    } else if(mag < 100 && s_steps > 0) {
+      // Keep simulating once started
+      int o2 = s_sess[s_si][0];
+      uint8_t pt2 = s_phases[o2+s_pi].type;
+      if(pt2 == PH_RUN) s_steps += 2 + (rand() % 2);
+      else if(pt2 == PH_WALK) s_steps += 1 + (rand() % 2);
+    }
   }
   if(s_run_layer) layer_mark_dirty(s_run_layer);
 }
