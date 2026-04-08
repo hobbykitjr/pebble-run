@@ -162,6 +162,7 @@ static bool s_sim_hr=false;     // Simulate HR on emery emulator
 // Step tracking (gabbro/chalk)
 static int s_steps=0;
 static bool s_step_high=false;
+static int s_confetti=0;  // Confetti animation frame
 
 // ============================================================================
 // COMPLETION TRACKING
@@ -484,13 +485,12 @@ static void run_draw(Layer *l, GContext *ctx) {
     {
       GColor confetti[] = {GColorRed,GColorYellow,GColorGreen,GColorCyan,
                            GColorOrange,GColorPurple,GColorMagenta,GColorPictonBlue};
-      int elapsed = s_tot_dur - s_tot_rem;
-      int seed = elapsed * 31 + 7;
+      int seed = s_confetti * 31 + 7;
       for(int i=0; i<25; i++) {
         seed = (seed * 1103515245 + 12345) & 0x7fffffff;
         int cx = seed % w;
         seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-        int cy = (seed % h + elapsed * 4 + i * 17) % h;
+        int cy = (seed % h + s_confetti * 4 + i * 17) % h;
         graphics_context_set_fill_color(ctx, confetti[i % 8]);
         int sz = 2 + (i % 3);
         graphics_fill_rect(ctx, GRect(cx, cy, sz, sz), 0, GCornerNone);
@@ -646,7 +646,13 @@ static void run_draw(Layer *l, GContext *ctx) {
 // RUN TICK
 // ============================================================================
 static void run_tick(struct tm *t, TimeUnits u) {
-  if(!s_started || s_paused || s_done) return;
+  // Keep confetti animating on done screen
+  if(s_done) {
+    s_confetti++;
+    if(s_run_layer) layer_mark_dirty(s_run_layer);
+    return;
+  }
+  if(!s_started || s_paused) return;
   s_ph_rem--;
   s_tot_rem--;
   if(!s_half && s_tot_rem <= s_tot_dur/2) {
@@ -771,7 +777,13 @@ static void run_unload(Window *w) {
 // DAY MENU (custom drawn with completion status)
 // ============================================================================
 static uint16_t day_num_rows(MenuLayer *ml, uint16_t si, void *data) { return 3; }
-static int16_t day_cell_h(MenuLayer *ml, MenuIndex *idx, void *data) { return 56; }
+static int16_t day_cell_h(MenuLayer *ml, MenuIndex *idx, void *data) {
+  #if PBL_DISPLAY_HEIGHT >= 260
+  return 72;
+  #else
+  return 56;
+  #endif
+}
 
 static void day_draw(GContext *ctx, const Layer *cell, MenuIndex *idx, void *data) {
   GRect cb = layer_get_bounds(cell);
@@ -819,15 +831,22 @@ static void day_draw(GContext *ctx, const Layer *cell, MenuIndex *idx, void *dat
   else
     snprintf(title, sizeof(title), "Day %d", row+1);
 
+  #if PBL_DISPLAY_HEIGHT >= 260
+  GFont ft = fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD);
+  GFont fs = fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD);
+  int ty1=6, ty2=36;
+  #else
   GFont ft = fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD);
   GFont fs = fonts_get_system_font(FONT_KEY_GOTHIC_14);
+  int ty1=2, ty2=28;
+  #endif
   graphics_draw_text(ctx, title, ft,
-    GRect(tx, 2, cb.size.w-tx-16, 28), GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
+    GRect(tx, ty1, cb.size.w-tx-16, 32), GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
 
   char sub[40];
   snprintf(sub, sizeof(sub), "%s (%d min)", s_sess_desc[si], sess_dur(si)/60);
   graphics_draw_text(ctx, sub, fs,
-    GRect(tx, 28, cb.size.w-tx-16, 18), GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
+    GRect(tx, ty2, cb.size.w-tx-16, 22), GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
 
   // Green check circle for completed
   #ifdef PBL_COLOR
@@ -887,7 +906,13 @@ static void day_unload(Window *w) {
 // WEEK MENU (custom drawn with progress dots)
 // ============================================================================
 static uint16_t wk_num_rows(MenuLayer *ml, uint16_t si, void *data) { return 9; }
-static int16_t wk_cell_h(MenuLayer *ml, MenuIndex *idx, void *data) { return 56; }
+static int16_t wk_cell_h(MenuLayer *ml, MenuIndex *idx, void *data) {
+  #if PBL_DISPLAY_HEIGHT >= 260
+  return 72;
+  #else
+  return 56;
+  #endif
+}
 
 static void wk_draw(GContext *ctx, const Layer *cell, MenuIndex *idx, void *data) {
   GRect cb = layer_get_bounds(cell);
@@ -914,8 +939,15 @@ static void wk_draw(GContext *ctx, const Layer *cell, MenuIndex *idx, void *data
   // Title
   char title[16];
   snprintf(title, sizeof(title), "Week %d", row+1);
+  #if PBL_DISPLAY_HEIGHT >= 260
+  GFont ft = fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD);
+  GFont fs = fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD);
+  int ty1=6, ty2=36;
+  #else
   GFont ft = fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD);
   GFont fs = fonts_get_system_font(FONT_KEY_GOTHIC_14);
+  int ty1=2, ty2=28;
+  #endif
 
   GColor tc = (done_cnt==3) ? GColorLightGray : GColorWhite;
   #ifndef PBL_COLOR
@@ -929,9 +961,9 @@ static void wk_draw(GContext *ctx, const Layer *cell, MenuIndex *idx, void *data
   int wx = 10;
   #endif
   graphics_draw_text(ctx, title, ft,
-    GRect(wx, 2, cb.size.w-wx-50, 28), GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
+    GRect(wx, ty1, cb.size.w-wx-50, 32), GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
   graphics_draw_text(ctx, s_wk_desc[row], fs,
-    GRect(wx, 28, cb.size.w-wx-50, 18), GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
+    GRect(wx, ty2, cb.size.w-wx-50, 22), GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
 
   // Completion dots (3 circles on right side)
   int dx = cb.size.w - 40;
