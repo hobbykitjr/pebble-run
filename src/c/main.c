@@ -547,17 +547,9 @@ static void run_draw(Layer *l, GContext *ctx) {
   graphics_draw_text(ctx, pbuf, f_big,
     GRect(0,y_count,w,50), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
 
-  // Steps/HR above bar
+  // Steps/HR display
   #ifdef PBL_PLATFORM_EMERY
-  if(s_hr_bpm > 0) {
-    GColor hc = hr_zone_color(s_hr_bpm);
-    draw_heart(ctx, w/2-22, y_step+3, hc);
-    char bpm_buf[8]; snprintf(bpm_buf,sizeof(bpm_buf),"%d",s_hr_bpm);
-    graphics_context_set_text_color(ctx, hc);
-    graphics_draw_text(ctx,bpm_buf,f_info,
-      GRect(w/2-12,y_step-1,50,22), GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
-    graphics_context_set_text_color(ctx, fg);
-  }
+  // Emery: HR at bottom next to W/D
   #else
   if(s_steps > 0) {
     if(big) {
@@ -590,8 +582,27 @@ static void run_draw(Layer *l, GContext *ctx) {
   // W/D at bottom
   char hdr[16];
   snprintf(hdr, sizeof(hdr), "W%d D%d", s_wk+1, s_day+1);
+
+  #ifdef PBL_PLATFORM_EMERY
+  // Emery: W/D on left, heart+BPM on right
+  if(s_hr_bpm > 0) {
+    graphics_draw_text(ctx, hdr, f_sm,
+      GRect(20,y_extra,w/2-20,18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+    GColor hc = hr_zone_color(s_hr_bpm);
+    draw_heart(ctx, w/2+20, y_extra+5, hc);
+    char bpm_buf[8]; snprintf(bpm_buf,sizeof(bpm_buf),"%d",s_hr_bpm);
+    graphics_context_set_text_color(ctx, hc);
+    graphics_draw_text(ctx,bpm_buf,f_med,
+      GRect(w/2+30,y_extra-2,50,22), GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
+    graphics_context_set_text_color(ctx, fg);
+  } else {
+    graphics_draw_text(ctx, hdr, f_sm,
+      GRect(0,y_extra,w,18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+  }
+  #else
   graphics_draw_text(ctx, hdr, f_sm,
     GRect(0,y_extra,w,18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+  #endif
 
   // Motivational saying (rect screens)
   #ifdef PBL_RECT
