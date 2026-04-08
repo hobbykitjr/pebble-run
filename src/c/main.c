@@ -512,27 +512,49 @@ static void run_draw(Layer *l, GContext *ctx) {
     graphics_draw_text(ctx, buf, f_info,
       GRect(0, y_count+6, w, 24), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
 
-    // Stats line below bar: time + steps/HR
+    // Stats below bar
     char tbuf[8];
     fmt_ms(tbuf, sizeof(tbuf), s_tot_dur);
+
     #ifdef PBL_PLATFORM_EMERY
+    // Emery: time completed + heart stats on separate lines
+    snprintf(buf, sizeof(buf), "%s completed!", tbuf);
+    graphics_context_set_text_color(ctx, fg);
+    graphics_draw_text(ctx, buf, f_med,
+      GRect(0, y_rem-2, w, 22), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
     if(s_hr_count > 0) {
       int avg = s_hr_sum / s_hr_count;
-      snprintf(buf, sizeof(buf), "%s | Avg %d Peak %d", tbuf, avg, s_hr_peak);
-    } else
+      int hr_y = y_rem + 22;
+      // Avg heart
+      draw_heart(ctx, w/2-55, hr_y+5, hr_zone_color(avg));
+      char abuf[12]; snprintf(abuf,sizeof(abuf),"Avg %d",avg);
+      graphics_context_set_text_color(ctx, fg);
+      graphics_draw_text(ctx,abuf,f_med,GRect(w/2-46,hr_y,55,22),
+        GTextOverflowModeTrailingEllipsis,GTextAlignmentLeft,NULL);
+      // Peak heart
+      draw_heart(ctx, w/2+12, hr_y+5, hr_zone_color(s_hr_peak));
+      char pbuf2[12]; snprintf(pbuf2,sizeof(pbuf2),"Pk %d",s_hr_peak);
+      graphics_draw_text(ctx,pbuf2,f_med,GRect(w/2+21,hr_y,55,22),
+        GTextOverflowModeTrailingEllipsis,GTextAlignmentLeft,NULL);
+    }
     #else
+    // Round: time + steps in one line
     if(s_steps > 0)
       snprintf(buf, sizeof(buf), "%s | %d steps", tbuf, s_steps);
     else
-    #endif
       snprintf(buf, sizeof(buf), "%s completed!", tbuf);
     graphics_context_set_text_color(ctx, fg);
     graphics_draw_text(ctx, buf, f_info,
       GRect(0, y_rem, w, 22), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+    #endif
 
     // Motivation
+    int mot_y = y_extra;
+    #ifdef PBL_PLATFORM_EMERY
+    mot_y = y_rem + 46;  // Below HR stats
+    #endif
     graphics_draw_text(ctx, s_motiv[s_mi], f_med,
-      GRect(10, y_extra, w-20, 40), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+      GRect(10, mot_y, w-20, 40), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
     return;
   }
 
