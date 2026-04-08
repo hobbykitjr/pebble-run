@@ -846,8 +846,8 @@ static void run_unload(Window *w) {
 // ============================================================================
 static uint16_t day_num_rows(MenuLayer *ml, uint16_t si, void *data) { return 3; }
 static int16_t day_cell_h(MenuLayer *ml, MenuIndex *idx, void *data) {
-  #if PBL_DISPLAY_HEIGHT >= 260
-  return 72;
+  #if PBL_DISPLAY_HEIGHT >= 228
+  return 68;
   #else
   return 56;
   #endif
@@ -970,8 +970,8 @@ static void day_unload(Window *w) {
 // ============================================================================
 static uint16_t wk_num_rows(MenuLayer *ml, uint16_t si, void *data) { return 9; }
 static int16_t wk_cell_h(MenuLayer *ml, MenuIndex *idx, void *data) {
-  #if PBL_DISPLAY_HEIGHT >= 260
-  return 72;
+  #if PBL_DISPLAY_HEIGHT >= 228
+  return 68;
   #else
   return 56;
   #endif
