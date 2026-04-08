@@ -161,6 +161,11 @@ static int s_hr_bpm=0;          // Current BPM (0 = no reading)
 static int s_hr_peak=0;         // Peak BPM during session
 static int s_hr_sum=0;          // Sum of all readings (for average)
 static int s_hr_count=0;        // Number of readings
+
+// Accelerometer step tracking (for watches without HR)
+static int s_steps=0;           // Step count during session
+static bool s_step_high=false;  // Was above threshold last sample
+static bool s_has_real_hr=false; // Got at least one real HR reading
 #define MAX_HR 190              // Default max HR for zone calculation
 
 // ============================================================================
@@ -256,6 +261,7 @@ static void init_session(void) {
   s_half = false;
   s_mi = rand() % N_MOTIV;
   s_hr_bpm=0; s_hr_peak=0; s_hr_sum=0; s_hr_count=0;
+  s_steps=0; s_step_high=false; s_has_real_hr=false;
 }
 
 // ============================================================================
@@ -288,6 +294,20 @@ static void draw_heart(GContext *ctx, int x, int y, GColor c) {
   graphics_fill_rect(ctx, GRect(x+1,y+3,5,1), 0, GCornerNone);
   graphics_fill_rect(ctx, GRect(x+2,y+4,3,1), 0, GCornerNone);
   graphics_fill_rect(ctx, GRect(x+3,y+5,1,1), 0, GCornerNone);
+}
+
+// Tiny shoe icon (7x5)
+static void draw_shoe(GContext *ctx, int x, int y, GColor c) {
+  graphics_context_set_fill_color(ctx, c);
+  // Ankle/top
+  graphics_fill_rect(ctx, GRect(x,y,3,2), 0, GCornerNone);
+  // Sole (wider)
+  graphics_fill_rect(ctx, GRect(x-1,y+2,6,2), 0, GCornerNone);
+  // Toe
+  graphics_fill_rect(ctx, GRect(x+5,y+2,2,2), 0, GCornerNone);
+  // Tread
+  graphics_context_set_fill_color(ctx, GColorBlack);
+  graphics_fill_rect(ctx, GRect(x-1,y+4,8,1), 0, GCornerNone);
 }
 
 // Phase color helper
@@ -467,26 +487,35 @@ static void run_draw(Layer *l, GContext *ctx) {
     // Stats below bar
     char tbuf[8];
     fmt_ms(tbuf, sizeof(tbuf), s_tot_dur);
-    if(s_hr_count > 0) {
+    if(s_hr_count > 0 && (s_has_real_hr || s_dev)) {
       int avg = s_hr_sum / s_hr_count;
-      snprintf(buf, sizeof(buf), "%s  Avg %d  Peak %d", tbuf, avg, s_hr_peak);
+      snprintf(buf, sizeof(buf), "%s completed!", tbuf);
+      graphics_draw_text(ctx, buf, f14,
+        GRect(0, y_rem, w, 18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+      // HR stats: avg heart + peak heart
+      draw_heart(ctx, w/2-50, y_rem+20, hr_zone_color(avg));
+      char abuf[8]; snprintf(abuf,sizeof(abuf),"Avg %d",avg);
+      graphics_context_set_text_color(ctx, fg);
+      graphics_draw_text(ctx,abuf,f14,GRect(w/2-42,y_rem+17,50,16),
+        GTextOverflowModeTrailingEllipsis,GTextAlignmentLeft,NULL);
+      draw_heart(ctx, w/2+18, y_rem+20, hr_zone_color(s_hr_peak));
+      char pbuf2[8]; snprintf(pbuf2,sizeof(pbuf2),"Pk %d",s_hr_peak);
+      graphics_draw_text(ctx,pbuf2,f14,GRect(w/2+26,y_rem+17,50,16),
+        GTextOverflowModeTrailingEllipsis,GTextAlignmentLeft,NULL);
+    } else if(s_steps > 0) {
+      snprintf(buf, sizeof(buf), "%s completed!", tbuf);
+      graphics_draw_text(ctx, buf, f14,
+        GRect(0, y_rem, w, 18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+      // Step stats
+      draw_shoe(ctx, w/2-30, y_rem+22, GColorWhite);
+      char sbuf[16]; snprintf(sbuf,sizeof(sbuf),"%d steps",s_steps);
+      graphics_context_set_text_color(ctx, fg);
+      graphics_draw_text(ctx,sbuf,f18,GRect(w/2-20,y_rem+17,80,22),
+        GTextOverflowModeTrailingEllipsis,GTextAlignmentLeft,NULL);
     } else {
       snprintf(buf, sizeof(buf), "%s completed!", tbuf);
-    }
-    graphics_draw_text(ctx, buf, f14,
-      GRect(0, y_rem, w, 18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
-    // HR stats with heart icons on done screen
-    if(s_hr_count > 0) {
-      int avg = s_hr_sum / s_hr_count;
-      draw_heart(ctx, w/2-50, y_rem+20, hr_zone_color(avg));
-      char abuf[8]; snprintf(abuf,sizeof(abuf),"%d",avg);
-      graphics_context_set_text_color(ctx, fg);
-      graphics_draw_text(ctx,abuf,f14,GRect(w/2-42,y_rem+17,30,16),
-        GTextOverflowModeTrailingEllipsis,GTextAlignmentLeft,NULL);
-      draw_heart(ctx, w/2+14, y_rem+20, hr_zone_color(s_hr_peak));
-      char pbuf2[8]; snprintf(pbuf2,sizeof(pbuf2),"%d",s_hr_peak);
-      graphics_draw_text(ctx,pbuf2,f14,GRect(w/2+22,y_rem+17,30,16),
-        GTextOverflowModeTrailingEllipsis,GTextAlignmentLeft,NULL);
+      graphics_draw_text(ctx, buf, f14,
+        GRect(0, y_rem, w, 18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
     }
     // Motivation
     graphics_draw_text(ctx, s_motiv[s_mi], f18,
@@ -511,14 +540,14 @@ static void run_draw(Layer *l, GContext *ctx) {
   graphics_draw_text(ctx, obuf, f18,
     GRect(0,y_rem,w,22), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
 
-  // Week/Day + HR (bottom)
-  if(s_hr_bpm > 0) {
+  // Week/Day + stats (bottom)
+  char hdr[16];
+  snprintf(hdr, sizeof(hdr), "W%d D%d", s_wk+1, s_day+1);
+
+  if(s_hr_bpm > 0 && (s_has_real_hr || s_dev)) {
     // Show W/D on left, heart+BPM on right
-    char hdr[16];
-    snprintf(hdr, sizeof(hdr), "W%d D%d", s_wk+1, s_day+1);
     graphics_draw_text(ctx, hdr, f14,
       GRect(20,y_hdr,w/2-20,18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
-    // Heart icon + BPM
     GColor hc = hr_zone_color(s_hr_bpm);
     draw_heart(ctx, w/2+20, y_hdr+5, hc);
     char bpm_buf[8];
@@ -526,11 +555,20 @@ static void run_draw(Layer *l, GContext *ctx) {
     graphics_context_set_text_color(ctx, hc);
     graphics_draw_text(ctx,bpm_buf,f18,
       GRect(w/2+30,y_hdr-2,50,22), GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
-    graphics_context_set_text_color(ctx, fg);  // Restore
+    graphics_context_set_text_color(ctx, fg);
+  } else if(s_steps > 0) {
+    // Show W/D on left, shoe+steps on right
+    graphics_draw_text(ctx, hdr, f14,
+      GRect(20,y_hdr,w/2-20,18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+    draw_shoe(ctx, w/2+20, y_hdr+5, GColorWhite);
+    char step_buf[8];
+    snprintf(step_buf,sizeof(step_buf),"%d",s_steps);
+    graphics_context_set_text_color(ctx, GColorWhite);
+    graphics_draw_text(ctx,step_buf,f18,
+      GRect(w/2+30,y_hdr-2,50,22), GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
+    graphics_context_set_text_color(ctx, fg);
   } else {
-    // No HR — just centered W/D
-    char hdr[16];
-    snprintf(hdr, sizeof(hdr), "W%d D%d", s_wk+1, s_day+1);
+    // No data — just centered W/D
     graphics_draw_text(ctx, hdr, f14,
       GRect(0,y_hdr,w,18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
   }
@@ -608,25 +646,36 @@ static void run_tick(struct tm *t, TimeUnits u) {
     vib_half();
   }
   if(s_ph_rem <= 0) next_phase();
-  // Poll heart rate (real sensor or simulated in dev mode)
+  // Poll heart rate from sensor
+  #if HAS_HR
   {
-    int hv = 0;
-    #if HAS_HR
-    hv = (int)health_service_peek_current_value(HealthMetricHeartRateBPM);
-    #endif
-    // Simulate HR in dev mode for testing
-    if(hv <= 0 && (s_dev || !s_d.valid)) {
-      int o = s_sess[s_si][0];
-      uint8_t pt = s_phases[o+s_pi].type;
-      int base = (pt==PH_RUN) ? 155 : (pt==PH_WALK) ? 120 : 95;
-      hv = base + (rand() % 11) - 5;  // +/- 5 BPM jitter
-    }
+    HealthValue hv = health_service_peek_current_value(HealthMetricHeartRateBPM);
     if(hv > 0) {
-      s_hr_bpm = hv;
+      s_hr_bpm = (int)hv;
+      s_has_real_hr = true;
       if(s_hr_bpm > s_hr_peak) s_hr_peak = s_hr_bpm;
       s_hr_sum += s_hr_bpm;
       s_hr_count++;
     }
+  }
+  #endif
+  // Simulate HR only in explicit dev mode (for emulator testing)
+  if(!s_has_real_hr && s_dev) {
+    int o2 = s_sess[s_si][0];
+    uint8_t pt2 = s_phases[o2+s_pi].type;
+    int base = (pt2==PH_RUN) ? 155 : (pt2==PH_WALK) ? 120 : 95;
+    s_hr_bpm = base + (rand() % 11) - 5;
+    if(s_hr_bpm > s_hr_peak) s_hr_peak = s_hr_bpm;
+    s_hr_sum += s_hr_bpm;
+    s_hr_count++;
+  }
+  // Accelerometer step counting (always, for watches without HR)
+  if(!s_has_real_hr && !s_dev) {
+    AccelData accel;
+    accel_service_peek(&accel);
+    int mag = abs(accel.x) + abs(accel.y) + abs(accel.z);
+    if(mag > 1500 && !s_step_high) { s_steps++; s_step_high = true; }
+    if(mag < 1200) s_step_high = false;
   }
   if(s_run_layer) layer_mark_dirty(s_run_layer);
 }
