@@ -224,6 +224,9 @@ static void vib_done(void) {
   vibes_enqueue_custom_pattern((VibePattern){.durations=s,.num_segments=7});
 }
 
+// Forward declarations
+static void start_confetti(void);
+
 // ============================================================================
 // RUN LOGIC
 // ============================================================================
