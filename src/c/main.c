@@ -573,24 +573,16 @@ static void run_draw(Layer *l, GContext *ctx) {
   #ifdef PBL_PLATFORM_EMERY
   // Emery: HR at bottom next to W/D
   #else
+  // Shoe + steps at bottom next to W/D (all round screens)
   if(s_steps > 0) {
-    if(big) {
-      // Gabbro: shoe + steps above bar
-      draw_shoe(ctx, w/2-22, y_step+3, GColorWhite);
-      char step_buf[12]; snprintf(step_buf,sizeof(step_buf),"%d",s_steps);
-      graphics_context_set_text_color(ctx, GColorWhite);
-      graphics_draw_text(ctx,step_buf,f_info,
-        GRect(w/2-12,y_step-1,60,22), GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
-      graphics_context_set_text_color(ctx, fg);
-    } else {
-      // Chalk: shoe + steps at bottom next to W/D
-      draw_shoe(ctx, w/2+12, y_extra+4, GColorWhite);
-      char step_buf[12]; snprintf(step_buf,sizeof(step_buf),"%d",s_steps);
-      graphics_context_set_text_color(ctx, GColorWhite);
-      graphics_draw_text(ctx,step_buf,f_sm,
-        GRect(w/2+22,y_extra+1,40,18), GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
-      graphics_context_set_text_color(ctx, fg);
-    }
+    GFont sf = big ? f_info : f_sm;
+    int sy = big ? y_extra+1 : y_extra+1;
+    draw_shoe(ctx, w/2+12, sy+4, GColorWhite);
+    char step_buf[12]; snprintf(step_buf,sizeof(step_buf),"%d",s_steps);
+    graphics_context_set_text_color(ctx, GColorWhite);
+    graphics_draw_text(ctx,step_buf,sf,
+      GRect(w/2+22,sy,50,22), GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
+    graphics_context_set_text_color(ctx, fg);
   }
   #endif
 
@@ -622,8 +614,14 @@ static void run_draw(Layer *l, GContext *ctx) {
       GRect(0,y_extra,w,18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
   }
   #else
-  graphics_draw_text(ctx, hdr, f_sm,
-    GRect(0,y_extra,w,18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+  if(s_steps > 0) {
+    // W/D on left, shoe+steps on right
+    graphics_draw_text(ctx, hdr, f_sm,
+      GRect(20,y_extra,w/2-20,18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+  } else {
+    graphics_draw_text(ctx, hdr, f_sm,
+      GRect(0,y_extra,w,18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+  }
   #endif
 
   // Motivational saying (rect screens)
