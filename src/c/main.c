@@ -608,18 +608,26 @@ static void run_tick(struct tm *t, TimeUnits u) {
     vib_half();
   }
   if(s_ph_rem <= 0) next_phase();
-  // Poll heart rate
-  #if HAS_HR
+  // Poll heart rate (real sensor or simulated in dev mode)
   {
-    HealthValue hv = health_service_peek_current_value(HealthMetricHeartRateBPM);
+    int hv = 0;
+    #if HAS_HR
+    hv = (int)health_service_peek_current_value(HealthMetricHeartRateBPM);
+    #endif
+    // Simulate HR in dev mode for testing
+    if(hv <= 0 && (s_dev || !s_d.valid)) {
+      int o = s_sess[s_si][0];
+      uint8_t pt = s_phases[o+s_pi].type;
+      int base = (pt==PH_RUN) ? 155 : (pt==PH_WALK) ? 120 : 95;
+      hv = base + (rand() % 11) - 5;  // +/- 5 BPM jitter
+    }
     if(hv > 0) {
-      s_hr_bpm = (int)hv;
+      s_hr_bpm = hv;
       if(s_hr_bpm > s_hr_peak) s_hr_peak = s_hr_bpm;
       s_hr_sum += s_hr_bpm;
       s_hr_count++;
     }
   }
-  #endif
   if(s_run_layer) layer_mark_dirty(s_run_layer);
 }
 
