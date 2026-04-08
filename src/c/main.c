@@ -297,6 +297,16 @@ static void draw_heart(GContext *ctx, int x, int y, GColor c) {
   graphics_fill_rect(ctx, GRect(x+3,y+5,1,1), 0, GCornerNone);
 }
 
+// Tiny shoe icon (7x5)
+static void draw_shoe(GContext *ctx, int x, int y, GColor c) {
+  graphics_context_set_fill_color(ctx, c);
+  graphics_fill_rect(ctx, GRect(x,y,3,2), 0, GCornerNone);
+  graphics_fill_rect(ctx, GRect(x-1,y+2,6,2), 0, GCornerNone);
+  graphics_fill_rect(ctx, GRect(x+5,y+2,2,2), 0, GCornerNone);
+  graphics_context_set_fill_color(ctx, GColorBlack);
+  graphics_fill_rect(ctx, GRect(x-1,y+4,8,1), 0, GCornerNone);
+}
+
 // Phase color helper
 static GColor phase_color(uint8_t type) {
   #ifdef PBL_COLOR
@@ -474,14 +484,7 @@ static void run_draw(Layer *l, GContext *ctx) {
     // Stats below bar
     char tbuf[8];
     fmt_ms(tbuf, sizeof(tbuf), s_tot_dur);
-    #ifdef PBL_PLATFORM_EMERY
     snprintf(buf, sizeof(buf), "%s completed!", tbuf);
-    #else
-    if(s_steps > 0)
-      snprintf(buf, sizeof(buf), "%s | %d steps!", tbuf, s_steps);
-    else
-      snprintf(buf, sizeof(buf), "%s completed!", tbuf);
-    #endif
     graphics_draw_text(ctx, buf, f14,
       GRect(0, y_rem, w, 18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
     #ifdef PBL_PLATFORM_EMERY
@@ -499,7 +502,14 @@ static void run_draw(Layer *l, GContext *ctx) {
         GTextOverflowModeTrailingEllipsis,GTextAlignmentLeft,NULL);
     }
     #else
-    // Steps already shown in the completed text above
+    // Step stats on done screen
+    if(s_steps > 0) {
+      draw_shoe(ctx, w/2-35, y_rem+20, GColorWhite);
+      char sbuf[16]; snprintf(sbuf,sizeof(sbuf),"%d steps",s_steps);
+      graphics_context_set_text_color(ctx, fg);
+      graphics_draw_text(ctx,sbuf,f14,GRect(w/2-25,y_rem+17,70,18),
+        GTextOverflowModeTrailingEllipsis,GTextAlignmentLeft,NULL);
+    }
     #endif
     // Motivation
     graphics_draw_text(ctx, s_motiv[s_mi], f18,
@@ -520,12 +530,7 @@ static void run_draw(Layer *l, GContext *ctx) {
   // Total remaining (below bar) — append steps on non-emery
   char obuf[40], tmp[8];
   fmt_ms(tmp, sizeof(tmp), s_tot_rem);
-  #ifndef PBL_PLATFORM_EMERY
-  if(s_steps > 0)
-    snprintf(obuf, sizeof(obuf), "%s remain | %d steps", tmp, s_steps);
-  else
-  #endif
-    snprintf(obuf, sizeof(obuf), "%s remaining", tmp);
+  snprintf(obuf, sizeof(obuf), "%s remaining", tmp);
   graphics_draw_text(ctx, obuf, f18,
     GRect(0,y_rem,w,22), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
 
@@ -551,9 +556,21 @@ static void run_draw(Layer *l, GContext *ctx) {
       GRect(0,y_hdr,w,18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
   }
   #else
-  // Gabbro/chalk: just W/D at bottom (steps shown in remaining line above)
-  graphics_draw_text(ctx, hdr, f14,
-    GRect(0,y_hdr,w,18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+  // Gabbro/chalk: W/D on left, shoe+steps on right
+  if(s_steps > 0) {
+    graphics_draw_text(ctx, hdr, f14,
+      GRect(20,y_hdr,w/2-20,18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+    draw_shoe(ctx, w/2+16, y_hdr+5, GColorWhite);
+    char step_buf[8];
+    snprintf(step_buf,sizeof(step_buf),"%d",s_steps);
+    graphics_context_set_text_color(ctx, GColorWhite);
+    graphics_draw_text(ctx,step_buf,f18,
+      GRect(w/2+26,y_hdr-2,50,22), GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
+    graphics_context_set_text_color(ctx, fg);
+  } else {
+    graphics_draw_text(ctx, hdr, f14,
+      GRect(0,y_hdr,w,18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+  }
   #endif
 
   // Motivational saying (rect screens have room below W/D)
