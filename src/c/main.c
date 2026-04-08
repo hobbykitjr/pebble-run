@@ -679,17 +679,19 @@ static void run_tick(struct tm *t, TimeUnits u) {
   }
   // Accelerometer step counting (for watches without HR, when not simulating HR)
   if(!s_has_real_hr && !s_sim_hr) {
-    AccelData accel;
+    AccelData accel = {0};
     accel_service_peek(&accel);
+    // Subtract ~1000 for gravity on stationary watch
     int mag = abs(accel.x) + abs(accel.y) + abs(accel.z);
+    bool stationary = (mag > 900 && mag < 1100);  // ~gravity only, no movement
     if(mag > 1500 && !s_step_high) { s_steps++; s_step_high = true; }
-    if(mag < 1200) s_step_high = false;
-    // Simulate steps when accel returns nothing (emulator)
-    if(mag < 100) {
+    if(mag < 1300) s_step_high = false;
+    // Simulate steps when stationary (emulator or no real movement data)
+    if(stationary || mag == 0) {
       int o2 = s_sess[s_si][0];
       uint8_t pt2 = s_phases[o2+s_pi].type;
-      if(pt2 == PH_RUN) s_steps += 2 + (rand() % 2);          // ~2-3 steps/sec
-      else s_steps += 1 + (rand() % 2);                        // ~1-2 steps/sec (walk/warm/cool)
+      if(pt2 == PH_RUN) s_steps += 2 + (rand() % 2);
+      else s_steps += 1 + (rand() % 2);
     }
   }
   if(s_run_layer) layer_mark_dirty(s_run_layer);
@@ -751,10 +753,12 @@ static void run_load(Window *w) {
   layer_add_child(wl, s_run_layer);
   window_set_click_config_provider(w, run_click);
   init_session();
+  accel_data_service_subscribe(0, NULL);  // Enable accel for peek
   tick_timer_service_subscribe(SECOND_UNIT, run_tick);
 }
 static void run_unload(Window *w) {
   tick_timer_service_unsubscribe();
+  accel_data_service_unsubscribe();
   if(s_run_layer) { layer_destroy(s_run_layer); s_run_layer = NULL; }
 }
 
