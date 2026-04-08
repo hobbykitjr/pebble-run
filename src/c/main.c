@@ -798,21 +798,21 @@ static void day_draw(GContext *ctx, const Layer *cell, MenuIndex *idx, void *dat
     graphics_context_set_fill_color(ctx, GColorFromHEX(0x0055AA));
     graphics_fill_rect(ctx, cb, 0, GCornerNone);
   }
-  // Left accent: mini session preview bar
+  // Horizontal session preview bar at bottom of cell
   int o=s_sess[si][0], n=s_sess[si][1];
-  int acc_h = cb.size.h - 8;
-  #ifdef PBL_RECT
-  int acc_x = 10;
-  #else
-  int acc_x = 4;
-  #endif
-  int acc_y = 4;
+  int bar_h = 5;
+  int bar_y = cb.size.h - bar_h - 2;
+  int bar_margin = 10;
+  int bar_w = cb.size.w - bar_margin * 2;
+  int bx = bar_margin;
+  int total = sess_dur(si);
   for(int i=0; i<n; i++) {
-    int seg_h = (s_phases[o+i].dur * acc_h) / sess_dur(si);
-    if(seg_h < 1) seg_h = 1;
+    int seg_w = (s_phases[o+i].dur * bar_w) / total;
+    if(i == n-1) seg_w = bar_margin + bar_w - bx;
+    if(seg_w < 1) seg_w = 1;
     graphics_context_set_fill_color(ctx, done ? GColorDarkGray : phase_color(s_phases[o+i].type));
-    graphics_fill_rect(ctx, GRect(acc_x, acc_y, 4, seg_h), 0, GCornerNone);
-    acc_y += seg_h;
+    graphics_fill_rect(ctx, GRect(bx, bar_y, seg_w, bar_h), 0, GCornerNone);
+    bx += seg_w;
   }
   #endif
 
@@ -919,14 +919,15 @@ static void wk_draw(GContext *ctx, const Layer *cell, MenuIndex *idx, void *data
     graphics_context_set_fill_color(ctx, GColorFromHEX(0x0055AA));
     graphics_fill_rect(ctx, cb, 0, GCornerNone);
   }
-  // Left accent bar: color by week progression
+  // Horizontal color bar at bottom: color by week progression
   GColor accent;
   if(row < 3)      accent = GColorFromHEX(0x00AA55);  // Early: green
   else if(row < 6) accent = GColorFromHEX(0xE0A000);  // Mid: yellow
   else             accent = GColorFromHEX(0xE04000);  // Late: orange
   if(done_cnt == 3) accent = GColorDarkGray;           // All done: muted
   graphics_context_set_fill_color(ctx, accent);
-  graphics_fill_rect(ctx, GRect(0, 0, 5, cb.size.h), 0, GCornerNone);
+  int ab_y = cb.size.h - 6;
+  graphics_fill_rect(ctx, GRect(10, ab_y, cb.size.w-20, 4), 0, GCornerNone);
   #endif
 
   // Title
