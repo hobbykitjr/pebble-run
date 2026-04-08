@@ -166,6 +166,7 @@ static int s_hr_count=0;        // Number of readings
 static int s_steps=0;           // Step count during session
 static bool s_step_high=false;  // Was above threshold last sample
 static bool s_has_real_hr=false; // Got at least one real HR reading
+static bool s_sim_hr=false;     // Simulating HR for emulator demo
 #define MAX_HR 190              // Default max HR for zone calculation
 
 // ============================================================================
@@ -262,6 +263,12 @@ static void init_session(void) {
   s_mi = rand() % N_MOTIV;
   s_hr_bpm=0; s_hr_peak=0; s_hr_sum=0; s_hr_count=0;
   s_steps=0; s_step_high=false; s_has_real_hr=false;
+  // Simulate HR on emery (Time 2) emulator when no real sensor
+  #ifdef PBL_PLATFORM_EMERY
+  s_sim_hr=true;  // Will be disabled if real HR data arrives
+  #else
+  s_sim_hr=false;
+  #endif
 }
 
 // ============================================================================
@@ -487,7 +494,7 @@ static void run_draw(Layer *l, GContext *ctx) {
     // Stats below bar
     char tbuf[8];
     fmt_ms(tbuf, sizeof(tbuf), s_tot_dur);
-    if(s_hr_count > 0 && (s_has_real_hr || s_dev)) {
+    if(s_hr_count > 0 && (s_has_real_hr || s_sim_hr)) {
       int avg = s_hr_sum / s_hr_count;
       snprintf(buf, sizeof(buf), "%s completed!", tbuf);
       graphics_draw_text(ctx, buf, f14,
@@ -544,7 +551,7 @@ static void run_draw(Layer *l, GContext *ctx) {
   char hdr[16];
   snprintf(hdr, sizeof(hdr), "W%d D%d", s_wk+1, s_day+1);
 
-  if(s_hr_bpm > 0 && (s_has_real_hr || s_dev)) {
+  if(s_hr_bpm > 0 && (s_has_real_hr || s_sim_hr)) {
     // Show W/D on left, heart+BPM on right
     graphics_draw_text(ctx, hdr, f14,
       GRect(20,y_hdr,w/2-20,18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
@@ -653,14 +660,15 @@ static void run_tick(struct tm *t, TimeUnits u) {
     if(hv > 0) {
       s_hr_bpm = (int)hv;
       s_has_real_hr = true;
+      s_sim_hr = false;  // Real data available, stop simulating
       if(s_hr_bpm > s_hr_peak) s_hr_peak = s_hr_bpm;
       s_hr_sum += s_hr_bpm;
       s_hr_count++;
     }
   }
   #endif
-  // Simulate HR only in explicit dev mode (for emulator testing)
-  if(!s_has_real_hr && s_dev) {
+  // Simulate HR for emulator demo (first 5 seconds with no real HR)
+  if(!s_has_real_hr && s_sim_hr) {
     int o2 = s_sess[s_si][0];
     uint8_t pt2 = s_phases[o2+s_pi].type;
     int base = (pt2==PH_RUN) ? 155 : (pt2==PH_WALK) ? 120 : 95;
@@ -669,8 +677,8 @@ static void run_tick(struct tm *t, TimeUnits u) {
     s_hr_sum += s_hr_bpm;
     s_hr_count++;
   }
-  // Accelerometer step counting (always, for watches without HR)
-  if(!s_has_real_hr && !s_dev) {
+  // Accelerometer step counting (for watches without HR, when not simulating)
+  if(!s_has_real_hr && !s_sim_hr) {
     AccelData accel;
     accel_service_peek(&accel);
     int mag = abs(accel.x) + abs(accel.y) + abs(accel.z);
