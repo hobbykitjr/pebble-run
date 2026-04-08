@@ -494,7 +494,14 @@ static void run_draw(Layer *l, GContext *ctx) {
     // Stats below bar
     char tbuf[8];
     fmt_ms(tbuf, sizeof(tbuf), s_tot_dur);
+    #ifdef PBL_PLATFORM_EMERY
     snprintf(buf, sizeof(buf), "%s completed!", tbuf);
+    #else
+    if(s_steps > 0)
+      snprintf(buf, sizeof(buf), "%s | %d steps!", tbuf, s_steps);
+    else
+      snprintf(buf, sizeof(buf), "%s completed!", tbuf);
+    #endif
     graphics_draw_text(ctx, buf, f14,
       GRect(0, y_rem, w, 18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
     #ifdef PBL_PLATFORM_EMERY
@@ -512,14 +519,7 @@ static void run_draw(Layer *l, GContext *ctx) {
         GTextOverflowModeTrailingEllipsis,GTextAlignmentLeft,NULL);
     }
     #else
-    // Step stats on done screen — right below "completed!"
-    if(s_steps > 0) {
-      draw_shoe(ctx, w/2-35, y_rem+20, GColorWhite);
-      char sbuf[16]; snprintf(sbuf,sizeof(sbuf),"%d steps",s_steps);
-      graphics_context_set_text_color(ctx, fg);
-      graphics_draw_text(ctx,sbuf,f14,GRect(w/2-25,y_rem+17,70,18),
-        GTextOverflowModeTrailingEllipsis,GTextAlignmentLeft,NULL);
-    }
+    // Steps already shown in the completed text above
     #endif
     // Motivation
     graphics_draw_text(ctx, s_motiv[s_mi], f18,
@@ -537,14 +537,19 @@ static void run_draw(Layer *l, GContext *ctx) {
   graphics_draw_text(ctx, pbuf, f42,
     GRect(0,y_count,w,50), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
 
-  // Total remaining (below bar)
-  char obuf[24], tmp[8];
+  // Total remaining (below bar) — append steps on non-emery
+  char obuf[40], tmp[8];
   fmt_ms(tmp, sizeof(tmp), s_tot_rem);
-  snprintf(obuf, sizeof(obuf), "%s remaining", tmp);
+  #ifndef PBL_PLATFORM_EMERY
+  if(s_steps > 0)
+    snprintf(obuf, sizeof(obuf), "%s left | %d steps", tmp, s_steps);
+  else
+  #endif
+    snprintf(obuf, sizeof(obuf), "%s remaining", tmp);
   graphics_draw_text(ctx, obuf, f18,
     GRect(0,y_rem,w,22), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
 
-  // Week/Day + stats (bottom)
+  // Week/Day (bottom)
   char hdr[16];
   snprintf(hdr, sizeof(hdr), "W%d D%d", s_wk+1, s_day+1);
 
@@ -566,20 +571,9 @@ static void run_draw(Layer *l, GContext *ctx) {
       GRect(0,y_hdr,w,18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
   }
   #else
-  // Gabbro/chalk: W/D at bottom, steps integrated into remaining line
+  // Gabbro/chalk: just W/D at bottom (steps shown in remaining line above)
   graphics_draw_text(ctx, hdr, f14,
     GRect(0,y_hdr,w,18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
-  if(s_steps > 0) {
-    // Draw shoe + steps between bar and remaining text
-    int step_y = y_rem - 20;
-    draw_shoe(ctx, w/2-30, step_y+4, GColorWhite);
-    char step_buf[12];
-    snprintf(step_buf,sizeof(step_buf),"%d steps",s_steps);
-    graphics_context_set_text_color(ctx, GColorWhite);
-    graphics_draw_text(ctx,step_buf,f14,
-      GRect(w/2-20,step_y,80,18), GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
-    graphics_context_set_text_color(ctx, fg);
-  }
   #endif
 
   // Motivational saying (rect screens have room below W/D)
