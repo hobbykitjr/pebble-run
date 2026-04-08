@@ -831,22 +831,15 @@ static void day_draw(GContext *ctx, const Layer *cell, MenuIndex *idx, void *dat
   else
     snprintf(title, sizeof(title), "Day %d", row+1);
 
-  #if PBL_DISPLAY_HEIGHT >= 260
-  GFont ft = fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD);
-  GFont fs = fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD);
-  int ty1=6, ty2=36;
-  #else
   GFont ft = fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD);
   GFont fs = fonts_get_system_font(FONT_KEY_GOTHIC_14);
-  int ty1=2, ty2=28;
-  #endif
   graphics_draw_text(ctx, title, ft,
-    GRect(tx, ty1, cb.size.w-tx-16, 32), GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
+    GRect(tx, 8, cb.size.w-tx-16, 28), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
 
   char sub[40];
   snprintf(sub, sizeof(sub), "%s (%d min)", s_sess_desc[si], sess_dur(si)/60);
   graphics_draw_text(ctx, sub, fs,
-    GRect(tx, ty2, cb.size.w-tx-16, 22), GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
+    GRect(tx, 36, cb.size.w-tx-16, 18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
 
   // Green check circle for completed
   #ifdef PBL_COLOR
@@ -939,15 +932,8 @@ static void wk_draw(GContext *ctx, const Layer *cell, MenuIndex *idx, void *data
   // Title
   char title[16];
   snprintf(title, sizeof(title), "Week %d", row+1);
-  #if PBL_DISPLAY_HEIGHT >= 260
-  GFont ft = fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD);
-  GFont fs = fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD);
-  int ty1=6, ty2=36;
-  #else
   GFont ft = fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD);
   GFont fs = fonts_get_system_font(FONT_KEY_GOTHIC_14);
-  int ty1=2, ty2=28;
-  #endif
 
   GColor tc = (done_cnt==3) ? GColorLightGray : GColorWhite;
   #ifndef PBL_COLOR
@@ -961,9 +947,9 @@ static void wk_draw(GContext *ctx, const Layer *cell, MenuIndex *idx, void *data
   int wx = 10;
   #endif
   graphics_draw_text(ctx, title, ft,
-    GRect(wx, ty1, cb.size.w-wx-50, 32), GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
+    GRect(wx, 8, cb.size.w-wx-40, 28), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
   graphics_draw_text(ctx, s_wk_desc[row], fs,
-    GRect(wx, ty2, cb.size.w-wx-50, 22), GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
+    GRect(wx, 36, cb.size.w-wx-40, 18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
 
   // Completion dots (3 circles on right side)
   int dx = cb.size.w - 40;
