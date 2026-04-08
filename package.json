@@ -11,7 +11,7 @@
     "sdkVersion": "3",
     "enableMultiJS": false,
     "targetPlatforms": ["chalk", "emery", "gabbro"],
-    "capabilities": [],
+    "capabilities": ["health"],
     "messageKeys": {},
     "watchapp": {
       "watchface": false

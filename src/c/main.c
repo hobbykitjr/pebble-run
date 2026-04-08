@@ -531,6 +531,13 @@ static void run_draw(Layer *l, GContext *ctx) {
       GRect(0,y_hdr,w,18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
   }
 
+  // Motivational saying (rect screens have room below W/D)
+  #ifdef PBL_RECT
+  graphics_context_set_text_color(ctx, fg);
+  graphics_draw_text(ctx, s_motiv[s_mi], f14,
+    GRect(10, y_hdr+18, w-20, 36), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+  #endif
+
   // Paused overlay
   if(s_paused) {
     // Dark overlay box
@@ -697,7 +704,12 @@ static void day_draw(GContext *ctx, const Layer *cell, MenuIndex *idx, void *dat
   // Left accent: mini session preview bar
   int o=s_sess[si][0], n=s_sess[si][1];
   int acc_h = cb.size.h - 8;
-  int acc_x = 4, acc_y = 4;
+  #ifdef PBL_RECT
+  int acc_x = 10;
+  #else
+  int acc_x = 4;
+  #endif
+  int acc_y = 4;
   for(int i=0; i<n; i++) {
     int seg_h = (s_phases[o+i].dur * acc_h) / sess_dur(si);
     if(seg_h < 1) seg_h = 1;
@@ -707,8 +719,12 @@ static void day_draw(GContext *ctx, const Layer *cell, MenuIndex *idx, void *dat
   }
   #endif
 
-  // Text
+  // Text — extra padding on rect screens
+  #ifdef PBL_RECT
+  int tx = 22;
+  #else
   int tx = 14;
+  #endif
   graphics_context_set_text_color(ctx, selected ? GColorWhite :
     (done ? GColorLightGray : GColorWhite));
 
@@ -721,12 +737,12 @@ static void day_draw(GContext *ctx, const Layer *cell, MenuIndex *idx, void *dat
   GFont ft = fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD);
   GFont fs = fonts_get_system_font(FONT_KEY_GOTHIC_14);
   graphics_draw_text(ctx, title, ft,
-    GRect(tx, 2, cb.size.w-tx-10, 28), GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
+    GRect(tx, 2, cb.size.w-tx-16, 28), GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
 
   char sub[40];
   snprintf(sub, sizeof(sub), "%s (%d min)", s_sess_desc[si], sess_dur(si)/60);
   graphics_draw_text(ctx, sub, fs,
-    GRect(tx, 28, cb.size.w-tx-10, 18), GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
+    GRect(tx, 28, cb.size.w-tx-16, 18), GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
 
   // Green check circle for completed
   #ifdef PBL_COLOR
@@ -822,13 +838,18 @@ static void wk_draw(GContext *ctx, const Layer *cell, MenuIndex *idx, void *data
   #endif
   graphics_context_set_text_color(ctx, selected ? GColorWhite : tc);
 
+  #ifdef PBL_RECT
+  int wx = 18;
+  #else
+  int wx = 10;
+  #endif
   graphics_draw_text(ctx, title, ft,
-    GRect(10, 2, cb.size.w-50, 28), GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
+    GRect(wx, 2, cb.size.w-wx-50, 28), GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
   graphics_draw_text(ctx, s_wk_desc[row], fs,
-    GRect(10, 28, cb.size.w-50, 18), GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
+    GRect(wx, 28, cb.size.w-wx-50, 18), GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
 
   // Completion dots (3 circles on right side)
-  int dx = cb.size.w - 34;
+  int dx = cb.size.w - 40;
   int dy = cb.size.h / 2;
   for(int d=0; d<3; d++) {
     #ifdef PBL_COLOR
