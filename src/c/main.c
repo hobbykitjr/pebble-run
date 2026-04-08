@@ -494,36 +494,33 @@ static void run_draw(Layer *l, GContext *ctx) {
     // Stats below bar
     char tbuf[8];
     fmt_ms(tbuf, sizeof(tbuf), s_tot_dur);
+    snprintf(buf, sizeof(buf), "%s completed!", tbuf);
+    graphics_draw_text(ctx, buf, f14,
+      GRect(0, y_rem, w, 18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+    #ifdef PBL_PLATFORM_EMERY
+    // HR stats on done screen
     if(s_hr_count > 0) {
       int avg = s_hr_sum / s_hr_count;
-      snprintf(buf, sizeof(buf), "%s completed!", tbuf);
-      graphics_draw_text(ctx, buf, f14,
-        GRect(0, y_rem, w, 18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
-      // HR stats: avg heart + peak heart
       draw_heart(ctx, w/2-50, y_rem+20, hr_zone_color(avg));
-      char abuf[8]; snprintf(abuf,sizeof(abuf),"Avg %d",avg);
+      char abuf[12]; snprintf(abuf,sizeof(abuf),"Avg %d",avg);
       graphics_context_set_text_color(ctx, fg);
       graphics_draw_text(ctx,abuf,f14,GRect(w/2-42,y_rem+17,50,16),
         GTextOverflowModeTrailingEllipsis,GTextAlignmentLeft,NULL);
       draw_heart(ctx, w/2+18, y_rem+20, hr_zone_color(s_hr_peak));
-      char pbuf2[8]; snprintf(pbuf2,sizeof(pbuf2),"Pk %d",s_hr_peak);
+      char pbuf2[12]; snprintf(pbuf2,sizeof(pbuf2),"Pk %d",s_hr_peak);
       graphics_draw_text(ctx,pbuf2,f14,GRect(w/2+26,y_rem+17,50,16),
         GTextOverflowModeTrailingEllipsis,GTextAlignmentLeft,NULL);
-    } else if(s_steps > 0) {
-      snprintf(buf, sizeof(buf), "%s completed!", tbuf);
-      graphics_draw_text(ctx, buf, f14,
-        GRect(0, y_rem, w, 18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
-      // Step stats
+    }
+    #else
+    // Step stats on done screen
+    if(s_steps > 0) {
       draw_shoe(ctx, w/2-30, y_rem+22, GColorWhite);
       char sbuf[16]; snprintf(sbuf,sizeof(sbuf),"%d steps",s_steps);
       graphics_context_set_text_color(ctx, fg);
       graphics_draw_text(ctx,sbuf,f18,GRect(w/2-20,y_rem+17,80,22),
         GTextOverflowModeTrailingEllipsis,GTextAlignmentLeft,NULL);
-    } else {
-      snprintf(buf, sizeof(buf), "%s completed!", tbuf);
-      graphics_draw_text(ctx, buf, f14,
-        GRect(0, y_rem, w, 18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
     }
+    #endif
     // Motivation
     graphics_draw_text(ctx, s_motiv[s_mi], f18,
       GRect(10, y_hdr-4, w-20, 40), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
@@ -551,8 +548,9 @@ static void run_draw(Layer *l, GContext *ctx) {
   char hdr[16];
   snprintf(hdr, sizeof(hdr), "W%d D%d", s_wk+1, s_day+1);
 
-  if(s_hr_bpm > 0 && s_hr_count > 0) {
-    // Show W/D on left, heart+BPM on right
+  #ifdef PBL_PLATFORM_EMERY
+  // Emery: show heart + BPM
+  if(s_hr_bpm > 0) {
     graphics_draw_text(ctx, hdr, f14,
       GRect(20,y_hdr,w/2-20,18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
     GColor hc = hr_zone_color(s_hr_bpm);
@@ -563,8 +561,13 @@ static void run_draw(Layer *l, GContext *ctx) {
     graphics_draw_text(ctx,bpm_buf,f18,
       GRect(w/2+30,y_hdr-2,50,22), GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
     graphics_context_set_text_color(ctx, fg);
-  } else if(s_steps > 0) {
-    // Show W/D on left, shoe+steps on right
+  } else {
+    graphics_draw_text(ctx, hdr, f14,
+      GRect(0,y_hdr,w,18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+  }
+  #else
+  // Gabbro/chalk: show shoe + steps
+  if(s_steps > 0) {
     graphics_draw_text(ctx, hdr, f14,
       GRect(20,y_hdr,w/2-20,18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
     draw_shoe(ctx, w/2+20, y_hdr+5, GColorWhite);
@@ -575,10 +578,10 @@ static void run_draw(Layer *l, GContext *ctx) {
       GRect(w/2+30,y_hdr-2,50,22), GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
     graphics_context_set_text_color(ctx, fg);
   } else {
-    // No data — just centered W/D
     graphics_draw_text(ctx, hdr, f14,
       GRect(0,y_hdr,w,18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
   }
+  #endif
 
   // Motivational saying (rect screens have room below W/D)
   #ifdef PBL_RECT
@@ -653,39 +656,40 @@ static void run_tick(struct tm *t, TimeUnits u) {
     vib_half();
   }
   if(s_ph_rem <= 0) next_phase();
-  // Poll heart rate from sensor
-  #if HAS_HR
+  // Platform split: emery gets HR, everything else gets steps
+  #ifdef PBL_PLATFORM_EMERY
   {
+    // Real HR from sensor
+    #if HAS_HR
     HealthValue hv = health_service_peek_current_value(HealthMetricHeartRateBPM);
-    // Only accept reasonable BPM values (30-220), ignore error codes
     if((int)hv >= 30 && (int)hv <= 220) {
       s_hr_bpm = (int)hv;
-      s_sim_hr = false;
       if(s_hr_bpm > s_hr_peak) s_hr_peak = s_hr_bpm;
       s_hr_sum += s_hr_bpm;
       s_hr_count++;
     }
+    #endif
+    // Simulate HR on emery emulator when no real data
+    if(s_hr_count == 0 || s_sim_hr) {
+      int o2 = s_sess[s_si][0];
+      uint8_t pt2 = s_phases[o2+s_pi].type;
+      int base = (pt2==PH_RUN) ? 155 : (pt2==PH_WALK) ? 120 : 95;
+      s_hr_bpm = base + (rand() % 11) - 5;
+      if(s_hr_bpm > s_hr_peak) s_hr_peak = s_hr_bpm;
+      s_hr_sum += s_hr_bpm;
+      s_hr_count++;
+      s_sim_hr = true;
+    }
   }
-  #endif
-  // Simulate HR on emery emulator
-  if(!s_has_real_hr && s_sim_hr) {
-    int o2 = s_sess[s_si][0];
-    uint8_t pt2 = s_phases[o2+s_pi].type;
-    int base = (pt2==PH_RUN) ? 155 : (pt2==PH_WALK) ? 120 : 95;
-    s_hr_bpm = base + (rand() % 11) - 5;
-    if(s_hr_bpm > s_hr_peak) s_hr_peak = s_hr_bpm;
-    s_hr_sum += s_hr_bpm;
-    s_hr_count++;
-  }
-  // Accelerometer step counting (always when not simulating HR)
-  if(!s_sim_hr) {
+  #else
+  {
+    // Gabbro/chalk: accelerometer step counting
     AccelData accel = {0};
     accel_service_peek(&accel);
     int mag = abs(accel.x) + abs(accel.y) + abs(accel.z);
-    // Real step detection from motion
     if(mag > 1500 && !s_step_high) { s_steps++; s_step_high = true; }
     if(mag < 1300) s_step_high = false;
-    // Simulate when no real motion (emulator)
+    // Simulate when stationary/emulator
     if(mag < 1200) {
       int o2 = s_sess[s_si][0];
       uint8_t pt2 = s_phases[o2+s_pi].type;
@@ -693,6 +697,7 @@ static void run_tick(struct tm *t, TimeUnits u) {
       else s_steps += 1 + (rand() % 2);
     }
   }
+  #endif
   if(s_run_layer) layer_mark_dirty(s_run_layer);
 }
 
