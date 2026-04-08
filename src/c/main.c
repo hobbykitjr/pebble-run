@@ -512,12 +512,12 @@ static void run_draw(Layer *l, GContext *ctx) {
         GTextOverflowModeTrailingEllipsis,GTextAlignmentLeft,NULL);
     }
     #else
-    // Step stats on done screen
+    // Step stats on done screen — right below "completed!"
     if(s_steps > 0) {
-      draw_shoe(ctx, w/2-30, y_rem+22, GColorWhite);
+      draw_shoe(ctx, w/2-35, y_rem+20, GColorWhite);
       char sbuf[16]; snprintf(sbuf,sizeof(sbuf),"%d steps",s_steps);
       graphics_context_set_text_color(ctx, fg);
-      graphics_draw_text(ctx,sbuf,f18,GRect(w/2-20,y_rem+17,80,22),
+      graphics_draw_text(ctx,sbuf,f14,GRect(w/2-25,y_rem+17,70,18),
         GTextOverflowModeTrailingEllipsis,GTextAlignmentLeft,NULL);
     }
     #endif
@@ -566,20 +566,19 @@ static void run_draw(Layer *l, GContext *ctx) {
       GRect(0,y_hdr,w,18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
   }
   #else
-  // Gabbro/chalk: show shoe + steps
+  // Gabbro/chalk: W/D at bottom, steps integrated into remaining line
+  graphics_draw_text(ctx, hdr, f14,
+    GRect(0,y_hdr,w,18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
   if(s_steps > 0) {
-    graphics_draw_text(ctx, hdr, f14,
-      GRect(20,y_hdr,w/2-20,18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
-    draw_shoe(ctx, w/2+20, y_hdr+5, GColorWhite);
-    char step_buf[8];
-    snprintf(step_buf,sizeof(step_buf),"%d",s_steps);
+    // Draw shoe + steps between bar and remaining text
+    int step_y = y_rem - 20;
+    draw_shoe(ctx, w/2-30, step_y+4, GColorWhite);
+    char step_buf[12];
+    snprintf(step_buf,sizeof(step_buf),"%d steps",s_steps);
     graphics_context_set_text_color(ctx, GColorWhite);
-    graphics_draw_text(ctx,step_buf,f18,
-      GRect(w/2+30,y_hdr-2,50,22), GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
+    graphics_draw_text(ctx,step_buf,f14,
+      GRect(w/2-20,step_y,80,18), GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
     graphics_context_set_text_color(ctx, fg);
-  } else {
-    graphics_draw_text(ctx, hdr, f14,
-      GRect(0,y_hdr,w,18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
   }
   #endif
 
