@@ -573,24 +573,14 @@ static void run_draw(Layer *l, GContext *ctx) {
   #ifdef PBL_PLATFORM_EMERY
   // Emery: HR at bottom next to W/D
   #else
-  // Steps at bottom next to W/D
+  // Steps at bottom — right-aligned, opposite W/D
   if(s_steps > 0) {
-    if(big) {
-      // Gabbro: shoe icon + number
-      draw_shoe(ctx, w/2+14, y_extra+4, GColorWhite);
-      char step_buf[12]; snprintf(step_buf,sizeof(step_buf),"%d",s_steps);
-      graphics_context_set_text_color(ctx, GColorWhite);
-      graphics_draw_text(ctx,step_buf,f_info,
-        GRect(w/2+24,y_extra+1,50,22), GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
-      graphics_context_set_text_color(ctx, fg);
-    } else {
-      // Chalk: tilde + number (no shoe icon, too cramped)
-      char step_buf[12]; snprintf(step_buf,sizeof(step_buf),"~ %d",s_steps);
-      graphics_context_set_text_color(ctx, GColorWhite);
-      graphics_draw_text(ctx,step_buf,f_sm,
-        GRect(w/2+10,y_extra,50,18), GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
-      graphics_context_set_text_color(ctx, fg);
-    }
+    draw_shoe(ctx, w-70, y_extra+4, GColorWhite);
+    char step_buf[12]; snprintf(step_buf,sizeof(step_buf),"%d",s_steps);
+    graphics_context_set_text_color(ctx, GColorWhite);
+    graphics_draw_text(ctx,step_buf,big?f_info:f_sm,
+      GRect(w-60,y_extra+1,55,22), GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
+    graphics_context_set_text_color(ctx, fg);
   }
   #endif
 
@@ -623,9 +613,9 @@ static void run_draw(Layer *l, GContext *ctx) {
   }
   #else
   if(s_steps > 0) {
-    // W/D on left, shoe+steps on right
+    // W/D on left
     graphics_draw_text(ctx, hdr, f_sm,
-      GRect(20,y_extra,w/2-20,18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+      GRect(10,y_extra,w/2,18), GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
   } else {
     graphics_draw_text(ctx, hdr, f_sm,
       GRect(0,y_extra,w,18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
