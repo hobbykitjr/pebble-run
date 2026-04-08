@@ -494,7 +494,7 @@ static void run_draw(Layer *l, GContext *ctx) {
     // Stats below bar
     char tbuf[8];
     fmt_ms(tbuf, sizeof(tbuf), s_tot_dur);
-    if(s_hr_count > 0 && (s_has_real_hr || s_sim_hr)) {
+    if(s_has_real_hr || s_sim_hr) {
       int avg = s_hr_sum / s_hr_count;
       snprintf(buf, sizeof(buf), "%s completed!", tbuf);
       graphics_draw_text(ctx, buf, f14,
@@ -551,7 +551,7 @@ static void run_draw(Layer *l, GContext *ctx) {
   char hdr[16];
   snprintf(hdr, sizeof(hdr), "W%d D%d", s_wk+1, s_day+1);
 
-  if(s_hr_bpm > 0 && (s_has_real_hr || s_sim_hr)) {
+  if(s_hr_bpm > 0 && s_sim_hr) {
     // Show W/D on left, heart+BPM on right
     graphics_draw_text(ctx, hdr, f14,
       GRect(20,y_hdr,w/2-20,18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
@@ -657,17 +657,18 @@ static void run_tick(struct tm *t, TimeUnits u) {
   #if HAS_HR
   {
     HealthValue hv = health_service_peek_current_value(HealthMetricHeartRateBPM);
-    if(hv > 0) {
+    // Only accept reasonable BPM values (30-220), ignore error codes
+    if((int)hv >= 30 && (int)hv <= 220) {
       s_hr_bpm = (int)hv;
       s_has_real_hr = true;
-      s_sim_hr = false;  // Real data available, stop simulating
+      s_sim_hr = false;
       if(s_hr_bpm > s_hr_peak) s_hr_peak = s_hr_bpm;
       s_hr_sum += s_hr_bpm;
       s_hr_count++;
     }
   }
   #endif
-  // Simulate HR for emulator demo (first 5 seconds with no real HR)
+  // Simulate HR on emery emulator
   if(!s_has_real_hr && s_sim_hr) {
     int o2 = s_sess[s_si][0];
     uint8_t pt2 = s_phases[o2+s_pi].type;
@@ -677,28 +678,21 @@ static void run_tick(struct tm *t, TimeUnits u) {
     s_hr_sum += s_hr_bpm;
     s_hr_count++;
   }
-  // Step counting: always runs when no real HR and not simulating HR
-  if(!s_has_real_hr && !s_sim_hr) {
+  // Accelerometer step counting (always when not simulating HR)
+  if(!s_sim_hr) {
     AccelData accel = {0};
     accel_service_peek(&accel);
     int mag = abs(accel.x) + abs(accel.y) + abs(accel.z);
-    // Real step detection
+    // Real step detection from motion
     if(mag > 1500 && !s_step_high) { s_steps++; s_step_high = true; }
     if(mag < 1300) s_step_high = false;
-    // Simulate when no real motion detected
+    // Simulate when no real motion (emulator)
     if(mag < 1200) {
       int o2 = s_sess[s_si][0];
       uint8_t pt2 = s_phases[o2+s_pi].type;
       if(pt2 == PH_RUN) s_steps += 2 + (rand() % 2);
       else s_steps += 1 + (rand() % 2);
     }
-    if(s_tot_rem % 10 == 0)
-      APP_LOG(APP_LOG_LEVEL_INFO,"Steps:%d mag:%d hr_real:%d sim:%d",
-        s_steps,mag,s_has_real_hr,s_sim_hr);
-  } else {
-    if(s_tot_rem % 10 == 0)
-      APP_LOG(APP_LOG_LEVEL_INFO,"Step block skipped: hr_real=%d sim=%d",
-        s_has_real_hr,s_sim_hr);
   }
   if(s_run_layer) layer_mark_dirty(s_run_layer);
 }
