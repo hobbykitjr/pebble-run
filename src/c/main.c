@@ -447,137 +447,142 @@ static void run_draw(Layer *l, GContext *ctx) {
   graphics_context_set_fill_color(ctx, bg);
   graphics_fill_rect(ctx, b, 0, GCornerNone);
 
-  // Session bar: centered at widest point, stretched wide
-  int bar_h = 18;
+  // Adaptive sizing
+  bool big = w >= 240;  // gabbro=260
+  int bar_h = big ? 20 : 16;
   int bar_w;
   #ifdef PBL_ROUND
-  bar_w = w * 82 / 100;   // Wide — flag is above, not beside
+  bar_w = w * 82 / 100;
   #else
   bar_w = w * 90 / 100;
   #endif
-  int bar_y = h * 50 / 100;  // Dead center
+  int bar_y = h * 52 / 100;
 
-  // Layout: phase+countdown above bar, remaining+W/D below
-  int y_phase = h * 10 / 100;
-  int y_count = h * 22 / 100;
-  int y_rem   = h * 60 / 100;
-  int y_hdr   = h * 74 / 100;
-
-  // Fonts
-  GFont f28 = fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD);
-  GFont f42 = fonts_get_system_font(FONT_KEY_LECO_42_NUMBERS);
-  GFont f18 = fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD);
-  GFont f14 = fonts_get_system_font(FONT_KEY_GOTHIC_14);
+  // Fonts scaled by screen
+  GFont f_title = fonts_get_system_font(big ? FONT_KEY_GOTHIC_28_BOLD : FONT_KEY_GOTHIC_24_BOLD);
+  GFont f_big   = fonts_get_system_font(FONT_KEY_LECO_42_NUMBERS);
+  GFont f_med   = fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD);
+  GFont f_sm    = fonts_get_system_font(FONT_KEY_GOTHIC_14);
+  GFont f_info  = fonts_get_system_font(big ? FONT_KEY_GOTHIC_18_BOLD : FONT_KEY_GOTHIC_14);
   graphics_context_set_text_color(ctx, fg);
 
-  // Session progress bar (both run and done)
+  // Layout Y positions
+  int y_phase = h * 6 / 100;
+  int y_count = h * 18 / 100;
+  int y_step  = h * 42 / 100;   // Steps above bar
+  int y_rem   = h * 62 / 100;
+  int y_extra = h * 74 / 100;
+
+  // Session progress bar
   draw_session_bar(ctx, w, h, bar_w, bar_h, bar_y);
 
   if(s_done) {
-    // DONE text above bar
-    graphics_draw_text(ctx, "DONE!", f28,
-      GRect(0, y_phase, w, 34), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
-    char buf[32];
-    snprintf(buf, sizeof(buf), "Week %d Day %d", s_wk+1, s_day+1);
-    graphics_draw_text(ctx, buf, f18,
-      GRect(0, y_count+4, w, 24), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
-    // Stats below bar
-    char tbuf[8];
-    fmt_ms(tbuf, sizeof(tbuf), s_tot_dur);
-    snprintf(buf, sizeof(buf), "%s completed!", tbuf);
-    graphics_draw_text(ctx, buf, f14,
-      GRect(0, y_rem, w, 18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
-    #ifdef PBL_PLATFORM_EMERY
-    // HR stats on done screen
-    if(s_hr_count > 0) {
-      int avg = s_hr_sum / s_hr_count;
-      draw_heart(ctx, w/2-50, y_rem+20, hr_zone_color(avg));
-      char abuf[12]; snprintf(abuf,sizeof(abuf),"Avg %d",avg);
-      graphics_context_set_text_color(ctx, fg);
-      graphics_draw_text(ctx,abuf,f14,GRect(w/2-42,y_rem+17,50,16),
-        GTextOverflowModeTrailingEllipsis,GTextAlignmentLeft,NULL);
-      draw_heart(ctx, w/2+18, y_rem+20, hr_zone_color(s_hr_peak));
-      char pbuf2[12]; snprintf(pbuf2,sizeof(pbuf2),"Pk %d",s_hr_peak);
-      graphics_draw_text(ctx,pbuf2,f14,GRect(w/2+26,y_rem+17,50,16),
-        GTextOverflowModeTrailingEllipsis,GTextAlignmentLeft,NULL);
-    }
-    #else
-    // Step stats on done screen
-    if(s_steps > 0) {
-      draw_shoe(ctx, w/2-35, y_rem+20, GColorWhite);
-      char sbuf[16]; snprintf(sbuf,sizeof(sbuf),"%d steps",s_steps);
-      graphics_context_set_text_color(ctx, fg);
-      graphics_draw_text(ctx,sbuf,f14,GRect(w/2-25,y_rem+17,70,18),
-        GTextOverflowModeTrailingEllipsis,GTextAlignmentLeft,NULL);
+    // Confetti! Random colored rectangles
+    #ifdef PBL_COLOR
+    {
+      GColor confetti[] = {GColorRed,GColorYellow,GColorGreen,GColorCyan,
+                           GColorOrange,GColorPurple,GColorMagenta,GColorPictonBlue};
+      int seed = s_fire_frame * 31 + 7;
+      for(int i=0; i<25; i++) {
+        seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+        int cx = seed % w;
+        seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+        int cy = (seed % h + s_fire_frame * 4 + i * 17) % h;
+        graphics_context_set_fill_color(ctx, confetti[i % 8]);
+        int sz = 2 + (i % 3);
+        graphics_fill_rect(ctx, GRect(cx, cy, sz, sz), 0, GCornerNone);
+      }
     }
     #endif
+
+    // DONE!
+    graphics_context_set_text_color(ctx, fg);
+    graphics_draw_text(ctx, "DONE!", f_title,
+      GRect(0, y_phase+2, w, 34), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+    char buf[32];
+    snprintf(buf, sizeof(buf), "Week %d Day %d", s_wk+1, s_day+1);
+    graphics_draw_text(ctx, buf, f_info,
+      GRect(0, y_count+6, w, 24), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+
+    // Stats line below bar: time + steps/HR
+    char tbuf[8];
+    fmt_ms(tbuf, sizeof(tbuf), s_tot_dur);
+    #ifdef PBL_PLATFORM_EMERY
+    if(s_hr_count > 0) {
+      int avg = s_hr_sum / s_hr_count;
+      snprintf(buf, sizeof(buf), "%s  Avg %d  Peak %d", tbuf, avg, s_hr_peak);
+    } else {
+      snprintf(buf, sizeof(buf), "%s completed!", tbuf);
+    }
+    #else
+    if(s_steps > 0) {
+      draw_shoe(ctx, w/2-45, y_rem+4, GColorWhite);
+      snprintf(buf, sizeof(buf), "%s | %d steps", tbuf, s_steps);
+    } else {
+      snprintf(buf, sizeof(buf), "%s completed!", tbuf);
+    }
+    #endif
+    graphics_context_set_text_color(ctx, fg);
+    graphics_draw_text(ctx, buf, f_info,
+      GRect(0, y_rem, w, 22), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+
     // Motivation
-    graphics_draw_text(ctx, s_motiv[s_mi], f18,
-      GRect(10, y_hdr-4, w-20, 40), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+    graphics_draw_text(ctx, s_motiv[s_mi], f_med,
+      GRect(10, y_extra, w-20, 40), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
     return;
   }
 
-  // Phase name (top)
-  graphics_draw_text(ctx, s_ph_name[pt], f28,
+  // === ACTIVE RUN SCREEN ===
+  // Phase name
+  graphics_draw_text(ctx, s_ph_name[pt], f_title,
     GRect(0,y_phase,w,34), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
 
-  // Phase countdown (big, above bar)
+  // Phase countdown
   char pbuf[8];
   fmt_ms(pbuf, sizeof(pbuf), s_ph_rem);
-  graphics_draw_text(ctx, pbuf, f42,
+  graphics_draw_text(ctx, pbuf, f_big,
     GRect(0,y_count,w,50), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
 
-  // Total remaining (below bar) — append steps on non-emery
-  char obuf[40], tmp[8];
-  fmt_ms(tmp, sizeof(tmp), s_tot_rem);
-  snprintf(obuf, sizeof(obuf), "%s remaining", tmp);
-  graphics_draw_text(ctx, obuf, f18,
-    GRect(0,y_rem,w,22), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
-
-  // Week/Day (bottom)
-  char hdr[16];
-  snprintf(hdr, sizeof(hdr), "W%d D%d", s_wk+1, s_day+1);
-
+  // Steps/HR above bar
   #ifdef PBL_PLATFORM_EMERY
-  // Emery: show heart + BPM
   if(s_hr_bpm > 0) {
-    graphics_draw_text(ctx, hdr, f14,
-      GRect(20,y_hdr,w/2-20,18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
     GColor hc = hr_zone_color(s_hr_bpm);
-    draw_heart(ctx, w/2+20, y_hdr+5, hc);
-    char bpm_buf[8];
-    snprintf(bpm_buf,sizeof(bpm_buf),"%d",s_hr_bpm);
+    draw_heart(ctx, w/2-22, y_step+3, hc);
+    char bpm_buf[8]; snprintf(bpm_buf,sizeof(bpm_buf),"%d",s_hr_bpm);
     graphics_context_set_text_color(ctx, hc);
-    graphics_draw_text(ctx,bpm_buf,f18,
-      GRect(w/2+30,y_hdr-2,50,22), GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
+    graphics_draw_text(ctx,bpm_buf,f_info,
+      GRect(w/2-12,y_step-1,50,22), GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
     graphics_context_set_text_color(ctx, fg);
-  } else {
-    graphics_draw_text(ctx, hdr, f14,
-      GRect(0,y_hdr,w,18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
   }
   #else
-  // Gabbro/chalk: W/D on left, shoe+steps on right
   if(s_steps > 0) {
-    graphics_draw_text(ctx, hdr, f14,
-      GRect(20,y_hdr,w/2-20,18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
-    draw_shoe(ctx, w/2+16, y_hdr+5, GColorWhite);
-    char step_buf[8];
-    snprintf(step_buf,sizeof(step_buf),"%d",s_steps);
+    draw_shoe(ctx, w/2-22, y_step+3, GColorWhite);
+    char step_buf[12]; snprintf(step_buf,sizeof(step_buf),"%d",s_steps);
     graphics_context_set_text_color(ctx, GColorWhite);
-    graphics_draw_text(ctx,step_buf,f18,
-      GRect(w/2+26,y_hdr-2,50,22), GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
+    graphics_draw_text(ctx,step_buf,f_info,
+      GRect(w/2-12,y_step-1,60,22), GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
     graphics_context_set_text_color(ctx, fg);
-  } else {
-    graphics_draw_text(ctx, hdr, f14,
-      GRect(0,y_hdr,w,18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
   }
   #endif
 
-  // Motivational saying (rect screens have room below W/D)
+  // Remaining
+  char obuf[24], tmp[8];
+  fmt_ms(tmp, sizeof(tmp), s_tot_rem);
+  snprintf(obuf, sizeof(obuf), "%s remaining", tmp);
+  graphics_draw_text(ctx, obuf, f_info,
+    GRect(0,y_rem,w,22), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+
+  // W/D at bottom
+  char hdr[16];
+  snprintf(hdr, sizeof(hdr), "W%d D%d", s_wk+1, s_day+1);
+  graphics_draw_text(ctx, hdr, f_sm,
+    GRect(0,y_extra,w,18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+
+  // Motivational saying (rect screens)
   #ifdef PBL_RECT
   graphics_context_set_text_color(ctx, fg);
-  graphics_draw_text(ctx, s_motiv[s_mi], f14,
-    GRect(10, y_hdr+18, w-20, 36), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+  graphics_draw_text(ctx, s_motiv[s_mi], f_sm,
+    GRect(10, y_extra+18, w-20, 36), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
   #endif
 
   // Paused overlay
