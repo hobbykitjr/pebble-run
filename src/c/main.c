@@ -677,22 +677,28 @@ static void run_tick(struct tm *t, TimeUnits u) {
     s_hr_sum += s_hr_bpm;
     s_hr_count++;
   }
-  // Accelerometer step counting (for watches without HR, when not simulating HR)
+  // Step counting: always runs when no real HR and not simulating HR
   if(!s_has_real_hr && !s_sim_hr) {
     AccelData accel = {0};
     accel_service_peek(&accel);
-    // Subtract ~1000 for gravity on stationary watch
     int mag = abs(accel.x) + abs(accel.y) + abs(accel.z);
-    bool stationary = (mag > 900 && mag < 1100);  // ~gravity only, no movement
+    // Real step detection
     if(mag > 1500 && !s_step_high) { s_steps++; s_step_high = true; }
     if(mag < 1300) s_step_high = false;
-    // Simulate steps when stationary (emulator or no real movement data)
-    if(stationary || mag == 0) {
+    // Simulate when no real motion detected
+    if(mag < 1200) {
       int o2 = s_sess[s_si][0];
       uint8_t pt2 = s_phases[o2+s_pi].type;
       if(pt2 == PH_RUN) s_steps += 2 + (rand() % 2);
       else s_steps += 1 + (rand() % 2);
     }
+    if(s_tot_rem % 10 == 0)
+      APP_LOG(APP_LOG_LEVEL_INFO,"Steps:%d mag:%d hr_real:%d sim:%d",
+        s_steps,mag,s_has_real_hr,s_sim_hr);
+  } else {
+    if(s_tot_rem % 10 == 0)
+      APP_LOG(APP_LOG_LEVEL_INFO,"Step block skipped: hr_real=%d sim=%d",
+        s_has_real_hr,s_sim_hr);
   }
   if(s_run_layer) layer_mark_dirty(s_run_layer);
 }
