@@ -269,6 +269,7 @@ static void init_session(void) {
 // RUN SCREEN DRAWING
 // ============================================================================
 
+#ifdef PBL_PLATFORM_EMERY
 // Heart rate zone color (based on % of max HR)
 static GColor hr_zone_color(int bpm) {
   #ifdef PBL_COLOR
@@ -296,6 +297,7 @@ static void draw_heart(GContext *ctx, int x, int y, GColor c) {
   graphics_fill_rect(ctx, GRect(x+2,y+4,3,1), 0, GCornerNone);
   graphics_fill_rect(ctx, GRect(x+3,y+5,1,1), 0, GCornerNone);
 }
+#endif
 
 // Tiny shoe icon (7x5)
 static void draw_shoe(GContext *ctx, int x, int y, GColor c) {
@@ -482,7 +484,7 @@ static void run_draw(Layer *l, GContext *ctx) {
     {
       GColor confetti[] = {GColorRed,GColorYellow,GColorGreen,GColorCyan,
                            GColorOrange,GColorPurple,GColorMagenta,GColorPictonBlue};
-      int seed = s_fire_frame * 31 + 7;
+      int seed = s_anim_ms * 31 + 7;
       for(int i=0; i<25; i++) {
         seed = (seed * 1103515245 + 12345) & 0x7fffffff;
         int cx = seed % w;
@@ -598,7 +600,7 @@ static void run_draw(Layer *l, GContext *ctx) {
       // Pre-start: simple "SELECT to Start"
       graphics_fill_rect(ctx, GRect(bx, h/2-18, bxw, 38), 8, GCornersAll);
       graphics_context_set_text_color(ctx, GColorWhite);
-      graphics_draw_text(ctx, "SELECT to Start", f18,
+      graphics_draw_text(ctx, "SELECT to Start", f_med,
         GRect(0, h/2-12, w, 26), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
     } else {
       // Pause menu with 3 options
@@ -631,7 +633,7 @@ static void run_draw(Layer *l, GContext *ctx) {
         } else {
           graphics_context_set_text_color(ctx, GColorLightGray);
         }
-        graphics_draw_text(ctx, opts[i], f18,
+        graphics_draw_text(ctx, opts[i], f_med,
           GRect(0, oy, w, row_h), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
         oy += row_h;
       }
