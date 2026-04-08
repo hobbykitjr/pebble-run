@@ -303,26 +303,30 @@ static GColor phase_color(uint8_t type) {
   #endif
 }
 
-// Tiny pixel race car with black outline for visibility
+// Tiny pixel runner (facing right, running pose)
 static void draw_car(GContext *ctx, int cx, int top_y) {
-  // Black outline/shadow
+  // Black outline for visibility
   graphics_context_set_fill_color(ctx, GColorBlack);
-  graphics_fill_rect(ctx, GRect(cx-5, top_y+1, 11, 5), 0, GCornerNone);
-  graphics_fill_rect(ctx, GRect(cx-3, top_y-1, 7, 2), 0, GCornerNone);
-  // Roof
+  // Head shadow
+  graphics_fill_rect(ctx, GRect(cx-1, top_y-1, 4, 4), 0, GCornerNone);
+  // Body shadow
+  graphics_fill_rect(ctx, GRect(cx-2, top_y+2, 5, 6), 0, GCornerNone);
+
   graphics_context_set_fill_color(ctx, GColorWhite);
-  graphics_fill_rect(ctx, GRect(cx-2, top_y, 5, 2), 0, GCornerNone);
-  // Body
-  graphics_fill_rect(ctx, GRect(cx-4, top_y+2, 9, 3), 0, GCornerNone);
-  // Windshield
-  #ifdef PBL_COLOR
-  graphics_context_set_fill_color(ctx, GColorPictonBlue);
-  graphics_fill_rect(ctx, GRect(cx+1, top_y+2, 3, 2), 0, GCornerNone);
-  #endif
-  // Wheels
-  graphics_context_set_fill_color(ctx, GColorBlack);
-  graphics_fill_rect(ctx, GRect(cx-3, top_y+5, 2, 2), 0, GCornerNone);
-  graphics_fill_rect(ctx, GRect(cx+2, top_y+5, 2, 2), 0, GCornerNone);
+  // Head (2x2)
+  graphics_fill_rect(ctx, GRect(cx, top_y, 2, 2), 0, GCornerNone);
+  // Body (torso leaning forward)
+  graphics_fill_rect(ctx, GRect(cx-1, top_y+2, 2, 3), 0, GCornerNone);
+  // Front arm (reaching forward)
+  graphics_fill_rect(ctx, GRect(cx+1, top_y+3, 2, 1), 0, GCornerNone);
+  // Back arm
+  graphics_fill_rect(ctx, GRect(cx-3, top_y+4, 2, 1), 0, GCornerNone);
+  // Front leg (extended forward)
+  graphics_fill_rect(ctx, GRect(cx, top_y+5, 1, 2), 0, GCornerNone);
+  graphics_fill_rect(ctx, GRect(cx+1, top_y+6, 1, 2), 0, GCornerNone);
+  // Back leg (kicked back)
+  graphics_fill_rect(ctx, GRect(cx-1, top_y+5, 1, 1), 0, GCornerNone);
+  graphics_fill_rect(ctx, GRect(cx-2, top_y+6, 1, 2), 0, GCornerNone);
 }
 
 // Checkered finish flag
