@@ -588,11 +588,12 @@ static void run_draw(Layer *l, GContext *ctx) {
   #else
   // Steps at bottom — right-aligned, opposite W/D
   if(s_steps > 0) {
-    draw_shoe(ctx, w-70, y_extra+6, GColorWhite);
+    int sx = big ? w-90 : w-65;
+    draw_shoe(ctx, sx, y_extra+6, GColorWhite);
     char step_buf[12]; snprintf(step_buf,sizeof(step_buf),"%d",s_steps);
     graphics_context_set_text_color(ctx, GColorWhite);
     graphics_draw_text(ctx,step_buf,big?f_info:f_sm,
-      GRect(w-60,y_extra+1,55,22), GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
+      GRect(sx+10,y_extra+1,55,22), GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
     graphics_context_set_text_color(ctx, fg);
   }
   #endif
@@ -626,8 +627,8 @@ static void run_draw(Layer *l, GContext *ctx) {
   }
   #else
   if(s_steps > 0) {
-    // W/D on left — push in more on small round
-    int wx = big ? 20 : 14;
+    // W/D on left — push in for round clipping at bottom
+    int wx = big ? 40 : 20;
     graphics_draw_text(ctx, hdr, f_sm,
       GRect(wx,y_extra,w/2,18), GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
   } else {
