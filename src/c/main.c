@@ -505,24 +505,25 @@ static void run_draw(Layer *l, GContext *ctx) {
 
     // DONE!
     graphics_context_set_text_color(ctx, fg);
+    // DONE! and Week/Day — bigger on larger screens
+    GFont f_done = fonts_get_system_font(big ? FONT_KEY_GOTHIC_28_BOLD : FONT_KEY_GOTHIC_28_BOLD);
+    GFont f_wk = fonts_get_system_font(big ? FONT_KEY_GOTHIC_24_BOLD : FONT_KEY_GOTHIC_18_BOLD);
     #ifdef PBL_RECT
-    // Rect (emery): bigger fonts, more room
-    GFont f_done = fonts_get_system_font(FONT_KEY_LECO_42_NUMBERS);
+    // Emery: use full top space
     graphics_draw_text(ctx, "DONE!", f_done,
-      GRect(0, y_phase-4, w, 50), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+      GRect(0, 4, w, 34), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
     char buf[32];
     snprintf(buf, sizeof(buf), "Week %d Day %d", s_wk+1, s_day+1);
-    GFont f_wk = fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD);
+    graphics_draw_text(ctx, buf, f_wk,
+      GRect(0, 34, w, 28), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+    #else
+    // Round: scale by size
+    graphics_draw_text(ctx, "DONE!", f_done,
+      GRect(0, y_phase, w, 34), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+    char buf[32];
+    snprintf(buf, sizeof(buf), "Week %d Day %d", s_wk+1, s_day+1);
     graphics_draw_text(ctx, buf, f_wk,
       GRect(0, y_count+2, w, 28), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
-    #else
-    // Round: standard sizes
-    graphics_draw_text(ctx, "DONE!", f_title,
-      GRect(0, y_phase+2, w, 34), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
-    char buf[32];
-    snprintf(buf, sizeof(buf), "Week %d Day %d", s_wk+1, s_day+1);
-    graphics_draw_text(ctx, buf, f_info,
-      GRect(0, y_count+6, w, 24), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
     #endif
 
     // Stats below bar
@@ -627,8 +628,8 @@ static void run_draw(Layer *l, GContext *ctx) {
   }
   #else
   if(s_steps > 0) {
-    // W/D on left — push in for round clipping at bottom
-    int wx = big ? 40 : 20;
+    // W/D on left — push toward center for round clipping
+    int wx = big ? 50 : 24;
     graphics_draw_text(ctx, hdr, f_sm,
       GRect(wx,y_extra,w/2,18), GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
   } else {
@@ -869,7 +870,7 @@ static void day_draw(GContext *ctx, const Layer *cell, MenuIndex *idx, void *dat
   {
     int o=s_sess[si][0], n=s_sess[si][1];
     int bar_h = 3;
-    int bar_y = 50;
+    int bar_y = cb.size.h - 8;
     int bar_margin = 10;
     int bar_w = cb.size.w - bar_margin * 2;
     int bx = bar_margin;
@@ -903,12 +904,12 @@ static void day_draw(GContext *ctx, const Layer *cell, MenuIndex *idx, void *dat
   GFont ft = fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD);
   GFont fs = fonts_get_system_font(FONT_KEY_GOTHIC_14);
   graphics_draw_text(ctx, title, ft,
-    GRect(tx, 4, cb.size.w-tx-16, 28), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+    GRect(tx, 2, cb.size.w-tx-16, 28), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
 
   char sub[40];
   snprintf(sub, sizeof(sub), "%s (%d min)", s_sess_desc[si], sess_dur(si)/60);
   graphics_draw_text(ctx, sub, fs,
-    GRect(tx, 30, cb.size.w-tx-16, 18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+    GRect(tx, 26, cb.size.w-tx-16, 18), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
 
   // Green check circle for completed
   #ifdef PBL_COLOR
@@ -995,7 +996,7 @@ static void wk_draw(GContext *ctx, const Layer *cell, MenuIndex *idx, void *data
   else             accent = GColorFromHEX(0xE04000);
   if(done_cnt == 3) accent = GColorDarkGray;
   graphics_context_set_fill_color(ctx, accent);
-  graphics_fill_rect(ctx, GRect(10, 50, cb.size.w-20, 3), 0, GCornerNone);
+  graphics_fill_rect(ctx, GRect(10, cb.size.h-8, cb.size.w-20, 3), 0, GCornerNone);
   #endif
 
   // Title
