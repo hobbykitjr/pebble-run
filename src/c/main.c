@@ -505,12 +505,25 @@ static void run_draw(Layer *l, GContext *ctx) {
 
     // DONE!
     graphics_context_set_text_color(ctx, fg);
+    #ifdef PBL_RECT
+    // Rect (emery): bigger fonts, more room
+    GFont f_done = fonts_get_system_font(FONT_KEY_LECO_42_NUMBERS);
+    graphics_draw_text(ctx, "DONE!", f_done,
+      GRect(0, y_phase-4, w, 50), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+    char buf[32];
+    snprintf(buf, sizeof(buf), "Week %d Day %d", s_wk+1, s_day+1);
+    GFont f_wk = fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD);
+    graphics_draw_text(ctx, buf, f_wk,
+      GRect(0, y_count+2, w, 28), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+    #else
+    // Round: standard sizes
     graphics_draw_text(ctx, "DONE!", f_title,
       GRect(0, y_phase+2, w, 34), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
     char buf[32];
     snprintf(buf, sizeof(buf), "Week %d Day %d", s_wk+1, s_day+1);
     graphics_draw_text(ctx, buf, f_info,
       GRect(0, y_count+6, w, 24), GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+    #endif
 
     // Stats below bar
     char tbuf[8];
