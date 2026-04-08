@@ -854,21 +854,23 @@ static void day_draw(GContext *ctx, const Layer *cell, MenuIndex *idx, void *dat
     graphics_context_set_fill_color(ctx, GColorFromHEX(0x0055AA));
     graphics_fill_rect(ctx, cb, 0, GCornerNone);
   }
-  // Horizontal session preview bar at bottom of cell
-  int o=s_sess[si][0], n=s_sess[si][1];
-  int bar_h = 4;
-  int bar_y = cb.size.h - bar_h;
-  int bar_margin = 10;
-  int bar_w = cb.size.w - bar_margin * 2;
-  int bx = bar_margin;
-  int total = sess_dur(si);
-  for(int i=0; i<n; i++) {
-    int seg_w = (s_phases[o+i].dur * bar_w) / total;
-    if(i == n-1) seg_w = bar_margin + bar_w - bx;
-    if(seg_w < 1) seg_w = 1;
-    graphics_context_set_fill_color(ctx, done ? GColorDarkGray : phase_color(s_phases[o+i].type));
-    graphics_fill_rect(ctx, GRect(bx, bar_y, seg_w, bar_h), 0, GCornerNone);
-    bx += seg_w;
+  // Horizontal session preview bar at bottom (skip on selected)
+  if(!selected) {
+    int o=s_sess[si][0], n=s_sess[si][1];
+    int bar_h = 3;
+    int bar_y = cb.size.h - bar_h;
+    int bar_margin = 10;
+    int bar_w = cb.size.w - bar_margin * 2;
+    int bx = bar_margin;
+    int total = sess_dur(si);
+    for(int i=0; i<n; i++) {
+      int seg_w = (s_phases[o+i].dur * bar_w) / total;
+      if(i == n-1) seg_w = bar_margin + bar_w - bx;
+      if(seg_w < 1) seg_w = 1;
+      graphics_context_set_fill_color(ctx, done ? GColorDarkGray : phase_color(s_phases[o+i].type));
+      graphics_fill_rect(ctx, GRect(bx, bar_y, seg_w, bar_h), 0, GCornerNone);
+      bx += seg_w;
+    }
   }
   #endif
 
@@ -975,14 +977,16 @@ static void wk_draw(GContext *ctx, const Layer *cell, MenuIndex *idx, void *data
     graphics_context_set_fill_color(ctx, GColorFromHEX(0x0055AA));
     graphics_fill_rect(ctx, cb, 0, GCornerNone);
   }
-  // Horizontal color bar at bottom: color by week progression
-  GColor accent;
-  if(row < 3)      accent = GColorFromHEX(0x00AA55);  // Early: green
-  else if(row < 6) accent = GColorFromHEX(0xE0A000);  // Mid: yellow
-  else             accent = GColorFromHEX(0xE04000);  // Late: orange
-  if(done_cnt == 3) accent = GColorDarkGray;           // All done: muted
-  graphics_context_set_fill_color(ctx, accent);
-  graphics_fill_rect(ctx, GRect(10, cb.size.h-4, cb.size.w-20, 4), 0, GCornerNone);
+  // Horizontal color bar at bottom (skip on selected row to avoid confusion)
+  if(!selected) {
+    GColor accent;
+    if(row < 3)      accent = GColorFromHEX(0x00AA55);
+    else if(row < 6) accent = GColorFromHEX(0xE0A000);
+    else             accent = GColorFromHEX(0xE04000);
+    if(done_cnt == 3) accent = GColorDarkGray;
+    graphics_context_set_fill_color(ctx, accent);
+    graphics_fill_rect(ctx, GRect(10, cb.size.h-3, cb.size.w-20, 3), 0, GCornerNone);
+  }
   #endif
 
   // Title
