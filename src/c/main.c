@@ -262,7 +262,7 @@ static void init_session(void) {
   s_half = false;
   s_mi = rand() % N_MOTIV;
   s_hr_bpm=0; s_hr_peak=0; s_hr_sum=0; s_hr_count=0;
-  s_steps=0; s_step_high=false; s_has_real_hr=false;
+  s_steps=42; s_step_high=false; s_has_real_hr=false;  // DEBUG: start at 42 to verify display
   // Simulate HR on emery (Time 2) emulator when no real sensor
   #ifdef PBL_PLATFORM_EMERY
   s_sim_hr=true;  // Will be disabled if real HR data arrives
